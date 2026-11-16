@@ -63,6 +63,7 @@ fi
 # онлайн-эталоны по запросу (ops/evals-online.id меняется только с согласия владельца — это траты)
 if [ -f $APP/ops/evals-online.id ] && ! cmp -s $APP/ops/evals-online.id $DATA/.evals-online.id; then
   cp $APP/ops/evals-online.id $DATA/.evals-online.id
+  for u in $(systemctl list-units 'jarvis-evals-*' --no-legend --plain | awk '{print $1}'); do systemctl stop "$u"; done
   systemd-run --unit=jarvis-evals-$(date +%s) --collect --property=RuntimeMaxSec=90m $APP/deploy/evals-online.sh >/dev/null 2>&1 || true
 fi
 # бэкап: первый — сразу, дальше по таймеру; ошибка бэкапа выкладку не валит

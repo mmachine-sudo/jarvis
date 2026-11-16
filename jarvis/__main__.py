@@ -58,13 +58,25 @@ def main(argv: list[str] | None = None) -> int:
         from .app import build
         # отдельная база: эталоны не попадают в задачи, траты, журнал и плейбук владельца
         settings.db_path = str(Path(settings.db_path).with_name("evals.db"))
-        Path(settings.db_path).unlink(missing_ok=True)
+        prior = 0.0  # траты прерванного прошлого прогона входят в тот же потолок
+        if Path(settings.db_path).exists():
+            import sqlite3
+            con = sqlite3.connect(settings.db_path)
+            try:
+                prior = float(con.execute("SELECT COALESCE(SUM(usd),0) FROM spend").fetchone()[0])
+            except sqlite3.Error:
+                pass
+            con.close()
+            for suffix in ("", "-wal", "-shm"):
+                Path(settings.db_path + suffix).unlink(missing_ok=True)
+        if prior:
+            print(f"■ прошлый прогон успел потратить ${prior:.2f}", flush=True)
         app = build(settings)
         app.orch.notifier = _Silent()  # не писать владельцу в Telegram во время прогона
         online = [c for c in cases if c.get("online", True)]
-        passed, total, usd, report = asyncio.run(run_online(app, online, max_usd=args.max_usd))
-        print("\n".join(report))
-        print(f"\nПрошло {passed}/{total} · потрачено ${usd:.2f} · ворота фазы 1: ≥ 80%")
+        passed, total, usd, report = asyncio.run(run_online(
+            app, online, max_usd=max(args.max_usd - prior, 0.0), on_line=lambda line: print(line, flush=True)))
+        print(f"\nПрошло {passed}/{total} · потрачено ${usd + prior:.2f} · ворота фазы 1: ≥ 80%", flush=True)
         return 0 if total and passed / total >= 0.8 else 1
 
     if args.cmd == "status":

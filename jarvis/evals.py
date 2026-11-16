@@ -31,28 +31,44 @@ def run_offline(settings: Settings, cases: list[dict]) -> tuple[int, int, list[s
     return passed, len(cases), report
 
 
-async def run_online(app, cases: list[dict], max_ticks: int = 30,
-                     max_usd: float | None = None) -> tuple[int, int, float, list[str]]:
-    """Прогон через настоящий оркестратор. Задачи, ждущие владельца, считаются дошедшими до решения."""
+async def run_online(app, cases: list[dict], max_ticks: int = 30, max_usd: float | None = None,
+                     case_timeout: float = 360.0, on_line=None) -> tuple[int, int, float, list[str]]:
+    """Прогон через настоящий оркестратор. Задачи, ждущие владельца, считаются дошедшими до решения.
+    Каждая строка итога отдаётся сразу (on_line), чтобы прогон был виден, даже если его прервут."""
+    import asyncio
     report, passed = [], 0
     start = app.treasury.spent_month()
-    for c in cases:
-        if max_usd is not None and app.treasury.spent_month() - start >= max_usd:
-            report.append(f"■ остановлено: потолок прогона ${max_usd:.2f}")
-            break
-        tid = app.orch.submit(c["request"])
+
+    def emit(line: str) -> None:
+        report.append(line)
+        if on_line:
+            on_line(line)
+
+    async def drive(c: dict, tid: str) -> None:
         for _ in range(max_ticks):
             t = app.store.task(tid)
             if t["status"] == "awaiting_clarification":
                 app.orch.answer_clarification(tid, c.get("clarify_answer", "Действуй на своё усмотрение."))
             if t["status"] in ("done", "awaiting_owner", "cancelled", "failed"):
-                break
-            if await app.orch.step(tid) is None:  # пауза провайдера — дальше гнать бессмысленно
-                break
+                return
+            if await app.orch.step(tid) is None:  # пауза провайдера
+                return
+
+    for c in cases:
+        if max_usd is not None and app.treasury.spent_month() - start >= max_usd:
+            emit(f"■ остановлено: потолок прогона ${max_usd:.2f}")
+            break
+        tid = app.orch.submit(c["request"])
+        timed_out = False
+        try:
+            await asyncio.wait_for(drive(c, tid), timeout=case_timeout)
+        except asyncio.TimeoutError:
+            timed_out = True
         t = app.store.task(tid)
         spent = sum(x["cost_usd"] or 0 for x in app.store.steps(tid))
         expect = c.get("expect_final", ["done", "awaiting_owner"])
-        ok = t["status"] in expect and (c.get("expect_class") in (None, t["cls"]))
+        ok = not timed_out and t["status"] in expect and (c.get("expect_class") in (None, t["cls"]))
         passed += ok
-        report.append(f"{'✓' if ok else '✗'} {c['id']}: {t['status']} · класс {t['cls']} · ${spent:.3f} · {(t['note'] or '')[:80]}")
+        why = f"не уложился в {case_timeout:.0f} с" if timed_out else (t["note"] or "")[:80]
+        emit(f"{'✓' if ok else '✗'} {c['id']}: {t['status']} · класс {t['cls']} · ${spent:.3f} · {why}")
     return passed, len(cases), app.treasury.spent_month() - start, report
