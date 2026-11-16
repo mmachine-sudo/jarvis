@@ -1,5 +1,6 @@
 #!/bin/bash
 # GitOps (таймер jarvis-deploy, каждые 2 мин, root): новый коммит в main → apply.sh; сбой → откат на прошлый.
+export LC_ALL=C.UTF-8
 set -uo pipefail
 APP=/opt/jarvis LOG=/var/log/jarvis-deploy.log
 exec 9>/run/jarvis-deploy.lock; flock -n 9 || exit 0

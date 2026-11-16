@@ -1,6 +1,7 @@
 #!/bin/bash
 # Применение текущего коммита /opt/jarvis на сервере (root). Вызывает deploy.sh; ненулевой выход → откат.
 # Последняя строка вывода — статус для журнала.
+export LC_ALL=C.UTF-8
 set -euo pipefail
 APP=/opt/jarvis VENV=/opt/jarvis-venv DATA=/var/lib/jarvis
 id jarvis >/dev/null 2>&1 || useradd --system --home $DATA --shell /usr/sbin/nologin jarvis
