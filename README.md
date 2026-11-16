@@ -79,7 +79,7 @@ Jarvis работает на бывшем сервере MMachine (Contabo, `mma
   `MM_TELEGRAM_BOT_TOKEN` → `TELEGRAM_BOT_TOKEN`; id владельца перенесён из базы MMachine в `/etc/jarvis/owner_id`.
   Чтобы дать Jarvis свои ключи, добавь в тот же проект `JARVIS_OPENROUTER_API_KEY` / `JARVIS_TELEGRAM_BOT_TOKEN` —
   они важнее общих; `jarvis-secrets-watch` перезапустит Jarvis сам.
-- **Конфиг**: `/etc/jarvis/jarvis.yaml` (создаётся из `config/jarvis.example.yaml` один раз, дальше не перезаписывается).
+- **Конфиг**: `/etc/jarvis/jarvis.yaml` пересобирается из `config/jarvis.example.yaml` при каждой выкладке — менять модели и правила нужно в репозитории.
 - **Данные**: `/var/lib/jarvis` (база), `/var/lib/jarvis/inherit/mmachine.db` — снимок базы MMachine для эталонов и уроков.
 - **Ручной запуск команд**: `/opt/jarvis/deploy/run.sh doctor | status | evals`.
 

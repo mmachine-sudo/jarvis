@@ -23,10 +23,8 @@ chmod -R a+rX $APP $VENV
 (cd $APP && $VENV/bin/python -m pytest -q -p no:cacheprovider) >/tmp/jarvis-tests.log 2>&1 \
   || { tail -n 15 /tmp/jarvis-tests.log; echo "jarvis: ТЕСТЫ НЕ ПРОШЛИ"; exit 1; }
 
-# конфиг живёт вне репозитория: создаётся из примера один раз, правки владельца сохраняются
-if [ ! -f /etc/jarvis/jarvis.yaml ]; then
-  sed 's#^db_path:.*#db_path: /var/lib/jarvis/jarvis.db#' $APP/config/jarvis.example.yaml > /etc/jarvis/jarvis.yaml
-fi
+# конфиг — из репозитория при каждой выкладке (источник правды — git); факты о владельце живут в базе (/fact)
+sed 's#^db_path:.*#db_path: /var/lib/jarvis/jarvis.db#' $APP/config/jarvis.example.yaml > /etc/jarvis/jarvis.yaml
 chown root:jarvis /etc/jarvis/jarvis.yaml; chmod 640 /etc/jarvis/jarvis.yaml
 
 # SearXNG (свой поиск, только 127.0.0.1:8888) — переехал из MMachine

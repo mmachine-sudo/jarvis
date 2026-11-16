@@ -36,14 +36,18 @@ limits:
 # версия семейства»). Критик всегда другого вендора, чем автор результата.
 # Id сверены с каталогом OpenRouter 16.11.2026; при запуске их ещё раз проверит `jarvis doctor`.
 models:
-  card:    [anthropic/claude-sonnet-5.5]
-  solo:    [anthropic/claude-sonnet-5.5, openai/gpt-6-luna]
-  planner: [anthropic/claude-sonnet-5.5]
-  worker:  [~deepseek/deepseek-v4-flash-latest, anthropic/claude-haiku-5.5]
-  synth:   [anthropic/claude-sonnet-5.5]
-  critic:  [openai/gpt-6-luna, ~google/gemini-flash-latest, anthropic/claude-sonnet-5.5]
-  reader:  [anthropic/claude-haiku-5.5, ~google/gemini-flash-latest]
-
+  # Порядок — по реальной надёжности на 60 днях работы MMachine (отчёт «Наследство MMachine» в Notion, 16.11.2026):
+  # gpt-6.1-sol 99% успешных вызовов; deepseek-v4.1-flash 96% и в 10 раз дешевле; grok-4.7 96%, но медленный (40 с);
+  # sonnet-5.5 93% (пустые ответы — их закрывает повтор ×4 токенов); gemini-4-argon 89% и дешёвый.
+  # kimi-k3.1-pro (76%) и прямой ключ Gemini (0%: нет квоты) не используем.
+  card:    [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
+  solo:    [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
+  planner: [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
+  worker:  [deepseek/deepseek-v4.1-flash, anthropic/claude-haiku-5.5]
+  synth:   [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
+  # критики четырёх вендоров: консилиум класса A собирает 3 голоса, даже когда автор — один из них
+  critic:  [openai/gpt-6.1-sol, google/gemini-4-argon, x-ai/grok-4.7, anthropic/claude-sonnet-5.5]
+  reader:  [anthropic/claude-haiku-5.5, google/gemini-4-argon]
 router:
   class_a_keywords: [деньг, перевод, перевести, оплат, купить, продать, вывод, usdt, крипт,
     кошел, банк, налог, виз, юрист, юрид, договор, контракт, инвест, кредит, займ, заём,
