@@ -31,11 +31,15 @@ def run_offline(settings: Settings, cases: list[dict]) -> tuple[int, int, list[s
     return passed, len(cases), report
 
 
-async def run_online(app, cases: list[dict], max_ticks: int = 30) -> tuple[int, int, float, list[str]]:
+async def run_online(app, cases: list[dict], max_ticks: int = 30,
+                     max_usd: float | None = None) -> tuple[int, int, float, list[str]]:
     """Прогон через настоящий оркестратор. Задачи, ждущие владельца, считаются дошедшими до решения."""
     report, passed = [], 0
     start = app.treasury.spent_month()
     for c in cases:
+        if max_usd is not None and app.treasury.spent_month() - start >= max_usd:
+            report.append(f"■ остановлено: потолок прогона ${max_usd:.2f}")
+            break
         tid = app.orch.submit(c["request"])
         for _ in range(max_ticks):
             t = app.store.task(tid)
@@ -45,8 +49,9 @@ async def run_online(app, cases: list[dict], max_ticks: int = 30) -> tuple[int, 
                 break
             await app.orch.advance(tid)
         t = app.store.task(tid)
+        spent = sum(x["cost_usd"] or 0 for x in app.store.steps(tid))
         expect = c.get("expect_final", ["done", "awaiting_owner"])
         ok = t["status"] in expect and (c.get("expect_class") in (None, t["cls"]))
         passed += ok
-        report.append(f"{'✓' if ok else '✗'} {c['id']}: {t['status']} · класс {t['cls']} · {t['note'] or ''}")
+        report.append(f"{'✓' if ok else '✗'} {c['id']}: {t['status']} · класс {t['cls']} · ${spent:.3f} · {(t['note'] or '')[:80]}")
     return passed, len(cases), app.treasury.spent_month() - start, report

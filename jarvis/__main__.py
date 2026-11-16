@@ -9,6 +9,11 @@ import sys
 from .config import load_settings
 
 
+class _Silent:
+    async def notify(self, text, buttons=None):
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="jarvis")
     p.add_argument("--config", default=None)
@@ -18,6 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     ev = sub.add_parser("evals", help="эталонный набор")
     ev.add_argument("--online", action="store_true", help="прогнать через настоящие модели (тратит бюджет)")
     ev.add_argument("--cases", default="evals/cases.yaml")
+    ev.add_argument("--max-usd", type=float, default=3.0, help="потолок трат прогона")
     sub.add_parser("status", help="бюджет и задачи")
     inh = sub.add_parser("inherit-report", help="агрегаты из снимка базы MMachine (модели, доработки)")
     inh.add_argument("path", nargs="?", default="/var/lib/jarvis/inherit/mmachine.db")
@@ -48,10 +54,15 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(report))
             print(f"\nРоутер: {passed}/{total}")
             return 0 if passed == total else 1
+        from pathlib import Path
         from .app import build
+        # отдельная база: эталоны не попадают в задачи, траты, журнал и плейбук владельца
+        settings.db_path = str(Path(settings.db_path).with_name("evals.db"))
+        Path(settings.db_path).unlink(missing_ok=True)
         app = build(settings)
+        app.orch.notifier = _Silent()  # не писать владельцу в Telegram во время прогона
         online = [c for c in cases if c.get("online", True)]
-        passed, total, usd, report = asyncio.run(run_online(app, online))
+        passed, total, usd, report = asyncio.run(run_online(app, online, max_usd=args.max_usd))
         print("\n".join(report))
         print(f"\nПрошло {passed}/{total} · потрачено ${usd:.2f} · ворота фазы 1: ≥ 80%")
         return 0 if total and passed / total >= 0.8 else 1
