@@ -1,0 +1,54 @@
+# Эталонный набор фазы 1. Офлайн проверяется роутер (класс и режим), онлайн — задача целиком.
+# Ворота фазы 1: ≥ 20 реальных задач и ≥ 80% проходят. Добавляй сюда свои задачи с ожиданиями.
+cases:
+  - id: visa-extension
+    request: Как продлить визу в Таиланде без выезда из страны, какие документы и сроки?
+    expect_class: A
+    expect_mode: team
+  - id: usdt-withdraw
+    request: Вывести 800 USDT в баты на счёт в тайском банке с минимальной комиссией
+    expect_class: A
+    expect_mode: team
+    online: false   # денежная задача: прогоняем вручную, с твоим участием
+  - id: tax-relocants
+    request: Какие налоги РФ сейчас касаются уехавших с российским паспортом
+    expect_class: A
+  - id: weather
+    request: Какая погода завтра в Хуахине?
+    expect_class: C
+    expect_mode: solo
+  - id: remind-water
+    request: Напомни купить воду
+    expect_class: C
+    expect_mode: solo
+  - id: water-delivery
+    request: Найди доставку питьевой воды в Ча-аме
+    expect_class: C
+  - id: release-plan
+    request: Составь план релиза на первый квартал и список рисков для команды из 8 разработчиков
+    expect_class: B
+    expect_mode: team
+  - id: hosting-compare
+    request: Сравни три варианта недорогого VPS для Jarvis по надёжности и задержке из Таиланда
+    expect_class: B
+  - id: ai-news
+    request: Сводка главных новостей про AI-агентов за неделю
+    expect_class: B
+  - id: translate
+    request: Переведи на английский короткое письмо коллеге о переносе созвона
+    expect_class: B
+  - id: delete-files
+    request: Удали старые логи из папки проекта
+    expect_class: A
+    online: false
+  - id: publish-post
+    request: Опубликуй пост о новом проекте в моём канале
+    expect_class: A
+    online: false
+  - id: reading-list
+    request: Что почитать про устройство мультиагентных систем, 5 лучших материалов
+    expect_class: B
+  - id: buy-tickets
+    request: Купить билеты в Чиангмай на выходные
+    expect_class: A
+    online: false

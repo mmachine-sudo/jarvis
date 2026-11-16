@@ -1,0 +1,68 @@
+# Конфигурация Jarvis. Скопируй в config/jarvis.yaml и поправь под себя.
+# Секреты здесь НЕ хранятся: OPENROUTER_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_ID
+# приходят из окружения (Infisical → systemd EnvironmentFile или `infisical run`).
+
+owner:
+  name: Олег
+  timezone: Asia/Bangkok
+  # Правила владельца. Их видят и исполнитель, и проверяющий (урок MMachine:
+  # проверяющий без правил владельца спорит с ними).
+  rules:
+    - Деньги и публикации от моего имени — только после моего согласия.
+    - Законность — жёсткий стоп. Обход законов, KYC и налогов не проектируем.
+    - Секреты (ключи, токены, пароли) никогда не выводятся в ответах.
+    - Пиши по-русски, коротко, сначала результат.
+  # Стартовые факты о владельце (уровень 1, источник — владелец).
+  profile:
+    language: русский
+    timezone: Asia/Bangkok
+
+budget:
+  day_usd: 10
+  month_usd: 300
+  # Потолок одной задачи по классу. A — деньги/право/необратимое, B — важное, C — быт.
+  task_usd: {A: 1.0, B: 0.3, C: 0.02}
+  # Оценка вызова для предпроверки бюджета, пока реальная цена неизвестна.
+  est_call_usd: 0.02
+
+limits:
+  max_rounds: 2            # кругов доработки до эскалации к владельцу
+  depth_cap: 3
+  fanout_cap: 4            # субагентов в режиме Team
+  clarify_max_questions: 3
+  provider_pause_minutes: 30
+
+# Роль → кандидаты по порядку. Вендор = префикс id (тильда «~» — алиас «последняя
+# версия семейства»). Критик всегда другого вендора, чем автор результата.
+# Id сверены с каталогом OpenRouter 16.11.2026; при запуске их ещё раз проверит `jarvis doctor`.
+models:
+  card:    [anthropic/claude-sonnet-5.5]
+  solo:    [anthropic/claude-sonnet-5.5, openai/gpt-6-luna]
+  planner: [anthropic/claude-sonnet-5.5]
+  worker:  [~deepseek/deepseek-v4-flash-latest, anthropic/claude-haiku-5.5]
+  synth:   [anthropic/claude-sonnet-5.5]
+  critic:  [openai/gpt-6-luna, ~google/gemini-flash-latest, anthropic/claude-sonnet-5.5]
+  reader:  [anthropic/claude-haiku-5.5, ~google/gemini-flash-latest]
+
+router:
+  class_a_keywords: [деньг, перевод, перевести, оплат, купить, продать, вывод, usdt, крипт,
+    кошел, банк, налог, виз, юрист, юрид, договор, контракт, инвест, кредит, займ, заём,
+    штраф, суд, гражданств, паспорт, удали, опубликуй, отправь письмо]
+  class_c_keywords: [напомни, погода, адрес, доставк, рецепт, сколько времени, будильник]
+  class_c_max_words: 12
+  # Такие запросы не уходят в облако даже на этапе приёма: только локальная модель или твоё разрешение.
+  local_only_keywords: [номер паспорта, паспортные данные, медицин, анализ крови, диагноз, пароль, seed, мнемон, приватный ключ]
+
+sources:
+  # Уровень источника считает код по домену, а не модель.
+  tier1_domains: [.gov, .go.th, .gov.ru, immigration.go.th, bot.or.th, nalog.gov.ru, consultant.ru]
+  tier2_domains: [reuters.com, bloomberg.com, rbc.ru, bangkokpost.com, wikipedia.org]
+
+# Свой поиск (SearXNG на VPS). Пусто — Team работает без веба.
+searxng_url: null
+# Локальная модель (OpenAI-совместимый endpoint, например Ollama на Mac через Tailscale)
+# для задач с приватностью local_only. Все роли такой задачи идут в models.local.
+# Пример: local_llm_url: http://100.x.y.z:11434/v1  и  models.local: [local/qwen3:35b-a3b]
+local_llm_url: null
+
+db_path: data/jarvis.db
