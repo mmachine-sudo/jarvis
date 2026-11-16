@@ -44,7 +44,8 @@ models:
   solo:    [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
   planner: [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
   worker:  [deepseek/deepseek-v4.1-flash, anthropic/claude-haiku-5.5]
-  synth:   [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
+  # сводка — самый длинный JSON; в эталонах 16.11 Sonnet на ней обрывался и стоил лишних $0.17 на задачу
+  synth:   [openai/gpt-6.1-sol, anthropic/claude-sonnet-5.5]
   # критики четырёх вендоров: консилиум класса A собирает 3 голоса, даже когда автор — один из них
   critic:  [openai/gpt-6.1-sol, google/gemini-4-argon, x-ai/grok-4.7, anthropic/claude-sonnet-5.5]
   reader:  [anthropic/claude-haiku-5.5, google/gemini-4-argon]

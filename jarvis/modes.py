@@ -101,7 +101,7 @@ def stamp_tiers(result: Result, settings: Settings) -> Result:
 async def run_solo(ctx: ExecContext) -> Result:
     system = SOLO_SYSTEM.replace("{owner}", ctx.owner())
     reply = await ctx.gw.chat("solo", as_messages(system, ctx.task_payload()), task_id=ctx.card.id,
-                              schema=Result, task_cap=ctx.cap, max_tokens=2500)
+                              schema=Result, task_cap=ctx.cap, max_tokens=4000)
     ctx.log("execute", "solo", f"ответ получен ({len(reply.data.answer)} симв.)", reply)
     ctx.author = reply.model
     return stamp_tiers(reply.data, ctx.settings)
@@ -171,7 +171,7 @@ async def run_team(ctx: ExecContext) -> Result:
         synth_user["предупреждения_безопасности"] = ctx.security_flags
     system = SYNTH_SYSTEM.replace("{owner}", ctx.owner())
     reply = await ctx.gw.chat("synth", as_messages(system, synth_user), task_id=card.id,
-                              schema=Result, task_cap=ctx.cap, max_tokens=2500)
+                              schema=Result, task_cap=ctx.cap, max_tokens=4000)
     ctx.log("synth", "synth", f"сведено {len(findings)} находок", reply)
     ctx.author = reply.model
     return stamp_tiers(reply.data, ctx.settings)

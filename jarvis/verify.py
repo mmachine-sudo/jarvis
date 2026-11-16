@@ -56,7 +56,7 @@ async def critic_review(card: TaskCard, result: Result, author_model: str, *, gw
             "результат": redact(result.model_dump_json())}
     reply = await gw.chat("critic", as_messages(system, user), task_id=card.id, schema=CriticVerdict,
                           exclude_vendors=exclude if exclude is not None else (vendor_of(author_model),), task_cap=card.budget.usd_cap,
-                          max_tokens=900, temperature=0.0)
+                          max_tokens=1500, temperature=0.0)
     return reply.data, reply
 
 

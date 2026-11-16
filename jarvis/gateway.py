@@ -128,6 +128,7 @@ class ModelGateway:
         if not cands:
             raise AllCandidatesFailed(f"нет моделей для роли «{role}» (исключены: {', '.join(exclude_vendors) or '—'})")
         errors: list[str] = []
+        total = 0.0  # все попытки этого вызова, включая неудачные: шаг задачи показывает полную цену
         for model in cands:
             local = model.startswith("local/")
             if not local and self.is_paused():
@@ -153,6 +154,7 @@ class ModelGateway:
                     break
                 usd = 0.0 if local else self._cost(body)
                 self.treasury.record(task_id, model, usd)
+                total += usd
                 text = self._content(body)
                 if not text.strip():
                     if attempt == 0:
@@ -161,7 +163,7 @@ class ModelGateway:
                     errors.append(f"{model}: пустой ответ")
                     break
                 if schema is None:
-                    return Reply(text, None, model, vendor_of(model), usd)
+                    return Reply(text, None, model, vendor_of(model), total)
                 try:
                     data = schema.model_validate_json(extract_json(text))
                 except (ValueError, ValidationError) as e:
@@ -171,7 +173,7 @@ class ModelGateway:
                         continue
                     errors.append(f"{model}: JSON не по схеме ({str(e).splitlines()[0][:120]})")
                     break  # урок MMachine: сломанный JSON → следующий кандидат
-                return Reply(text, data, model, vendor_of(model), usd)
+                return Reply(text, data, model, vendor_of(model), total)
         raise AllCandidatesFailed("; ".join(errors) or "все кандидаты отказали")
 
     async def _post(self, model: str, messages: list[dict], max_tokens: int,

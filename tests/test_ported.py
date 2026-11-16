@@ -139,3 +139,26 @@ async def test_team_survives_one_failed_subtask(make_orch, store):
         await orch.run_pending()
     assert store.task(tid)["status"] == "done"
     assert any("подзадача без ответа" in s["detail"] for s in store.steps(tid))
+
+
+async def test_reply_cost_includes_failed_attempts():
+    import httpx
+    from pydantic import BaseModel
+    from jarvis.config import Settings
+    from jarvis.gateway import ModelGateway
+    from jarvis.treasury import Treasury
+    n = []
+
+    def handler(req):
+        n.append(1)
+        bad = len(n) == 1  # первая модель отвечает не по схеме
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"x": 1}' if bad else '{"a": "ok"}'}}],
+                                         "usage": {"cost": 0.05}})
+
+    class A(BaseModel):
+        a: str
+    s = Settings(); s.openrouter_api_key = "t"
+    store = Store()
+    gw = ModelGateway(s, Treasury(store, s.budget), store, transport=httpx.MockTransport(handler))
+    r = await gw.chat("solo", [{"role": "user", "content": "x"}], schema=A)
+    assert r.usd == pytest.approx(0.10)  # и неудачная попытка видна в цене шага

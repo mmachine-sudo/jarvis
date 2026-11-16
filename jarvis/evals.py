@@ -32,7 +32,7 @@ def run_offline(settings: Settings, cases: list[dict]) -> tuple[int, int, list[s
 
 
 async def run_online(app, cases: list[dict], max_ticks: int = 30, max_usd: float | None = None,
-                     case_timeout: float = 360.0, on_line=None) -> tuple[int, int, float, list[str]]:
+                     case_timeout: float = 900.0, on_line=None) -> tuple[int, int, float, list[str]]:
     """Прогон через настоящий оркестратор. Задачи, ждущие владельца, считаются дошедшими до решения.
     Каждая строка итога отдаётся сразу (on_line), чтобы прогон был виден, даже если его прервут."""
     import asyncio
