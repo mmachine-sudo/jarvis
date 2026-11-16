@@ -73,6 +73,9 @@ async def scheduler(app: App, interval: float = 60.0) -> None:
 
 
 async def tick_schedule(app: App, now: datetime) -> None:
+    for r in app.orch.reminders.due():
+        app.orch.reminders.mark_sent(r["id"])
+        await app.bot.notify(f"⏰ Напоминание: {r['text']}")
     for e in app.journal.due(now.date().isoformat()):
         app.journal.mark_asked(e["id"])
         await app.bot.notify(f"📓 Проверка прогноза #{e['id']} ({e['task_id']}):\n«{e['question']}»\n"

@@ -51,6 +51,8 @@ models:
   # критики четырёх вендоров: консилиум класса A собирает 3 голоса, даже когда автор — один из них
   # grok последним: 40 с на ответ, класс A не укладывался по времени (эталоны 16.11)
   critic:  [openai/gpt-6.1-sol, google/gemini-4-argon, anthropic/claude-sonnet-5.5, x-ai/grok-4.7]
+  # критик для класса C: дешёвый, иначе одна проверка съедает лимит $0.02
+  critic_cheap: [google/gemini-4-argon, anthropic/claude-haiku-5.5, deepseek/deepseek-v4.1-flash]
   reader:  [anthropic/claude-haiku-5.5, google/gemini-4-argon]
 router:
   class_a_keywords: [деньг, перевод, перевести, оплат, купить, продать, вывод, usdt, крипт,

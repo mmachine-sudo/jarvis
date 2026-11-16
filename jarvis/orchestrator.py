@@ -15,7 +15,9 @@ from .config import Settings
 from .gateway import AllCandidatesFailed, Gateway, LocalOnlyGateway, ProviderPaused, Reply
 from .guard import Guard
 from .intake import draft_card
+from .reminders import Reminders
 from .rework import Rework, place_of
+from .router import is_reminder
 from .router import needs_local
 from .journal import Journal
 from .memory import Memory
@@ -45,6 +47,7 @@ class Orchestrator:
         self.memory, self.journal, self.guard, self.notifier = memory, journal, guard, notifier
         self.reader, self.searcher = reader, searcher
         self.rework = Rework(store)
+        self.reminders = Reminders(store, settings.owner.timezone)
 
     # --- вход ----------------------------------------------------------------------
     def submit(self, request: str) -> str:
@@ -111,6 +114,12 @@ class Orchestrator:
 
     async def _intake(self, t: dict) -> None:
         tid = t["id"]
+        if is_reminder(t["request"]) and not needs_local(t["request"], self.s.router):
+            text, when = await self.reminders.create(tid, t["request"], self.gw, self.s.task_cap("C"))
+            self.store.update_task(tid, status="done", cls="C", note=f"напоминание на {when:%d.%m %H:%M}")
+            self.store.add_step(tid, "done", "jarvis", f"напоминание {when:%Y-%m-%d %H:%M}: {text}")
+            await self.notifier.notify(f"⏰ {tid}: напомню {when:%d.%m в %H:%M} — {text}")
+            return
         answers = Store.loads(t["answers_json"], [])
         allow_q = not answers and not Store.loads(t["questions_json"], None)
         cloud_ok = self.store.get(f"privacy_override:{tid}") == "cloud"

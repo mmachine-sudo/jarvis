@@ -18,7 +18,7 @@ async def drive(orch: Orchestrator, ticks: int = 10) -> None:
 async def test_class_c_solo_done(make_orch, store):
     orch, gw, note = make_orch({"card": [card("C", evidence=False)], "solo": [result(url=None)],
                                 "critic": [verdict()]})
-    tid = orch.submit("Напомни купить воду")
+    tid = orch.submit("Какая погода завтра")
     await drive(orch)
     t = store.task(tid)
     assert t["status"] == "done" and t["cls"] == "C"
@@ -66,7 +66,7 @@ async def test_class_a_always_waits_for_owner_and_journals_forecast(make_orch, s
 async def test_rework_twice_then_escalate(make_orch, store):
     orch, gw, note = make_orch({"card": [card("C", evidence=False)], "solo": [result(url=None)],
                                 "critic": [verdict(False, "major", ["Нет сравнения вариантов"])]})
-    tid = orch.submit("Напомни про созвон")
+    tid = orch.submit("Какая погода завтра")
     await drive(orch, ticks=20)
     t = store.task(tid)
     assert t["status"] == "awaiting_owner"
@@ -83,7 +83,7 @@ async def test_owner_grants_more_rounds(make_orch, store):
     orch, gw, note = make_orch({"card": [card("C", evidence=False)], "solo": [result(url=None)],
                                 "critic": [verdict(False, "major", ["x"]), verdict(False, "major", ["x"]),
                                            verdict(False, "major", ["x"]), verdict()]})
-    tid = orch.submit("Напомни про созвон")
+    tid = orch.submit("Какая погода завтра")
     await drive(orch, ticks=20)
     approval_id = int(note.last[1][1][1].split(":")[1])  # кнопка «Ещё 2 круга»
     await orch.decide(approval_id, "rework")
@@ -109,7 +109,7 @@ async def test_clarification_flow(make_orch, store):
 async def test_stop_halts_everything(make_orch, store):
     orch, gw, _ = make_orch({"card": [card("C")]})
     orch.guard.stop()
-    tid = orch.submit("Напомни купить воду")
+    tid = orch.submit("Какая погода завтра")
     assert await orch.run_pending() == 0
     assert store.task(tid)["status"] == "new" and gw.calls == []
 
@@ -118,7 +118,7 @@ async def test_task_budget_exceeded_asks_owner_then_resumes(make_orch, store):
     orch, gw, note = make_orch({"card": [card("C", evidence=False)],
                                 "solo": [BudgetExceeded("задача T-0001", 0.02, 0.02), result(url=None)],
                                 "critic": [verdict()]})
-    tid = orch.submit("Напомни купить воду")
+    tid = orch.submit("Какая погода завтра")
     await drive(orch)
     assert store.task(tid)["status"] == "awaiting_owner"
     approval_id = int(note.last[1][0][1].split(":")[1])
@@ -147,7 +147,7 @@ async def test_provider_paused_keeps_tasks(make_orch, store):
 async def test_resume_after_restart(make_orch, settings, store):
     orch, gw, _ = make_orch({"card": [card("C", evidence=False)], "solo": [result(url=None)],
                              "critic": [verdict()]})
-    tid = orch.submit("Напомни купить воду")
+    tid = orch.submit("Какая погода завтра")
     await orch.advance(tid)  # только карточка
     store.update_task(tid, status="executing")  # «упали» посреди исполнения
     orch2, gw2, _ = make_orch({"solo": [result(url=None)], "critic": [verdict()]})

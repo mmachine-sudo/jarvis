@@ -29,3 +29,7 @@ def needs_local(text: str, cfg: RouterCfg) -> bool:
 def merge_class(rule: TaskClass, model: TaskClass) -> TaskClass:
     """Правила — нижняя граница: модель может только повысить класс."""
     return rule if rule.rank >= model.rank else model
+
+
+def is_reminder(text: str) -> bool:
+    return text.strip().lower().startswith(REMINDER_PREFIXES)

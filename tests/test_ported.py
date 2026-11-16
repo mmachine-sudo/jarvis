@@ -198,3 +198,14 @@ async def test_rework_resynthesizes_without_new_research(make_orch, store):
     assert store.task(tid)["status"] == "done"
     roles = gw.roles()
     assert roles.count("planner") == 1 and roles.count("synth") == 2  # второй круг — только сводка
+
+
+async def test_reminder_is_scheduled_and_sent(make_orch, store):
+    from datetime import datetime, timedelta, timezone
+    orch, gw, note = make_orch({"solo_cheap": [{"text": "Купить воду", "when": "2030-01-02 09:00"}]})
+    tid = orch.submit("Напомни купить воду")
+    await orch.run_pending()
+    assert store.task(tid)["status"] == "done" and "⏰" in note.last[0] and "Купить воду" in note.last[0]
+    assert "critic" not in gw.roles() and "card" not in gw.roles()
+    assert not orch.reminders.due()
+    assert orch.reminders.due(datetime(2030, 1, 3, tzinfo=timezone.utc))

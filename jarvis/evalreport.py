@@ -26,6 +26,13 @@ def report(path: str) -> list[str]:
         out.append("   " + "; ".join(f"{k}×{n} ${c:.3f}" for k, (n, c) in kinds.items()))
         if t["issues_json"] and t["status"] != "done":
             out.append("   замечания: " + str(t["issues_json"])[:600])
+        if t["cls"] == "A":  # таймлайн: где уходит время
+            prev = None
+            line = []
+            for s in steps:
+                ts = s["created_at"][11:19]
+                line.append(f"{ts} {s['kind']}/{(s['model'] or s['actor'])[:18]}")
+            out.append("   таймлайн: " + " → ".join(line)[:1500])
         for s in steps[-4:]:
             out.append(f"   …{s['created_at'][11:19]} {s['kind']}/{s['actor']} {s['model'] or ''}: {(s['detail'] or '')[:160]}")
     by_model = con.execute("SELECT model, COUNT(*) n, ROUND(SUM(usd),3) usd FROM spend GROUP BY model ORDER BY usd DESC")
