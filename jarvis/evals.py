@@ -67,7 +67,10 @@ async def run_online(app, cases: list[dict], max_ticks: int = 30, max_usd: float
         t = app.store.task(tid)
         spent = sum(x["cost_usd"] or 0 for x in app.store.steps(tid))
         expect = c.get("expect_final", ["done", "awaiting_owner"])
-        ok = not timed_out and t["status"] in expect and (c.get("expect_class") in (None, t["cls"]))
+        # эскалация «не прошло проверку после доработок» — не успех, даже если статус awaiting_owner
+        escalated = "не прошло проверку" in (t["note"] or "")
+        ok = (not timed_out and not escalated and t["status"] in expect
+              and (c.get("expect_class") in (None, t["cls"])))
         passed += ok
         why = f"не уложился в {case_timeout:.0f} с" if timed_out else (t["note"] or "")[:80]
         emit(f"{'✓' if ok else '✗'} {c['id']}: {t['status']} · класс {t['cls']} · ${spent:.3f} · {why}")

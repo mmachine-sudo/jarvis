@@ -26,3 +26,11 @@ if [ $RC -ne 0 ] && [ -n "$OLD" ]; then
 fi
 $APP/deploy/notify.sh "выкладка $NEW · $MSG · $LAST · диск $(df -h / | awk 'NR==2{print $5}') · память своб. $(free -m | awk '/Mem/{print $7}') МБ" \
   "Jarvis — сервер · $([ $RC -eq 0 ] && echo ок || echo СБОЙ) · $(date -u +'%Y-%m-%d %H:%M UTC') · $NEW"
+# журнал в Notion — последние 40 строк (полная история в git и /var/log/jarvis-deploy.log)
+( eval "$(/opt/jarvis/deploy/secrets.sh)"
+  P=4062c835-ac77-81f8-ab77-d7f16258259d
+  IDS=$(curl -fsS "https://api.notion.com/v1/blocks/$P/children?page_size=100" -H "Authorization: Bearer $NOTION_TOKEN" \
+    -H "Notion-Version: 2022-06-28" | jq -r '[.results[] | select(.type=="bulleted_list_item") | .id] | .[:-40][]' 2>/dev/null)
+  for b in $IDS; do curl -fsS -X DELETE "https://api.notion.com/v1/blocks/$b" -H "Authorization: Bearer $NOTION_TOKEN" \
+    -H "Notion-Version: 2022-06-28" >/dev/null || true; done ) || true
+
