@@ -9,7 +9,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Callable
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .card import Claim, Result, TaskCard
 from .config import Settings
@@ -38,6 +38,15 @@ class Finding(BaseModel):
     confidence: float = 0.5
 
     # модели часто отдают утверждения строками и уверенность словами — принимаем, а не роняем подзадачу
+    @model_validator(mode="before")
+    @classmethod
+    def _finding_alias(cls, v):
+        if isinstance(v, dict) and not v.get("finding"):
+            for k in ("answer", "summary", "result", "text", "ответ", "находка"):
+                if isinstance(v.get(k), str) and v[k].strip():
+                    return {**v, "finding": v[k]}
+        return v
+
     @field_validator("claims", mode="before")
     @classmethod
     def _claims(cls, v):

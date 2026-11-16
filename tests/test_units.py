@@ -155,7 +155,13 @@ def test_checklist_class_a():
                                                                    Claim(text="y")])
     problems = checklist(_card("A", forecast="?"), r)
     joined = " ".join(problems)
-    assert "без источника" in joined and "уровня 1" in joined and "что владелец" in joined
+    # половина без источника — ещё не блокер; нет источника 1-го уровня — предупреждение, не доработка
+    assert "без источника" not in joined and "что владелец" in joined and "вероятность" in joined
+    from jarvis.verify import official_source_gap
+    assert official_source_gap(_card("A", forecast="?"), r)
+    r2 = Result(answer="Достаточно длинный ответ владельцу", claims=[Claim(text="x"), Claim(text="y"),
+                                                                    Claim(text="z", source_url="https://f.com")])
+    assert "2 из 3 утверждений без источника" in " ".join(checklist(_card("A"), r2))
     assert "вероятность не дана" in joined
 
 

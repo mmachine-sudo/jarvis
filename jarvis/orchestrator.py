@@ -23,7 +23,7 @@ from .modes import ExecContext, run_solo, run_team
 from .reader import QuarantineReader, Searcher
 from .store import Store
 from .treasury import BudgetExceeded
-from .verify import accepted, checklist, consilium_review, critic_review
+from .verify import accepted, checklist, consilium_review, critic_review, official_source_gap
 
 ACTIVE = ["new", "ready", "executing", "verifying", "rework"]
 TERMINAL = {"done", "cancelled", "failed"}
@@ -193,7 +193,11 @@ class Orchestrator:
             self.store.add_step(tid, "verify", "critic",
                                 f"чек-лист: {len(problems)} нарушений; критик: {verdict.severity}", reply.model, reply.usd)
         if accepted(problems, verdict):
-            await self._finish(tid, card, result, verdict.issues, payload.get("security", []))
+            notes = list(verdict.issues)
+            if official_source_gap(card, result):
+                notes.insert(0, f"⚠️ Нет официального источника (уровень {card.evidence.min_tier}): "
+                                "перед решением сверь ключевые пункты на сайте ведомства")
+            await self._finish(tid, card, result, notes, payload.get("security", []))
             return
         issues = problems + verdict.issues
         rnd = int(t["round"] or 0) + 1

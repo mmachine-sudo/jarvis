@@ -34,11 +34,12 @@ def checklist(card: TaskCard, result: Result) -> list[str]:
         if not sourced:
             problems.append("Нет ни одного утверждения с источником, а карточка требует доказательств")
         elif card.cls == TaskClass.A:
+            # Класс A всегда уходит владельцу на решение, поэтому чек-лист не гоняет доработки ради
+            # недостижимого (эталоны 16.11: официальные сайты недоступны → 3 круга и $0.57 впустую).
+            # Блокирует только явный перекос: больше половины утверждений без источника.
             unsourced = [c for c in result.claims if not c.source_url]
-            if unsourced:
-                problems.append(f"Класс A: {len(unsourced)} утверждений без источника")
-            if not any((c.tier or 3) <= card.evidence.min_tier for c in sourced):
-                problems.append(f"Класс A: нет ни одного источника уровня {card.evidence.min_tier}")
+            if len(unsourced) * 2 > len(result.claims):
+                problems.append(f"Класс A: {len(unsourced)} из {len(result.claims)} утверждений без источника")
     if card.cls == TaskClass.A and not result.owner_actions:
         problems.append("Класс A: не указано, что владелец делает сам")
     if card.forecast_question and result.forecast_p is None:
@@ -83,6 +84,12 @@ async def consilium_review(card: TaskCard, result: Result, author_model: str, *,
     if len(votes) < 2:
         issues.append(f"Консилиум не собрался: состоялось голосов {len(votes)} из 2 нужных")
     return CriticVerdict(passed=ok, severity=worst if votes else "critical", issues=issues), replies
+
+
+def official_source_gap(card: TaskCard, result: Result) -> bool:
+    """Класс A без источника нужного уровня — не повод для доработки, а предупреждение владельцу."""
+    return card.cls == TaskClass.A and card.evidence.required and not any(
+        (c.tier or 3) <= card.evidence.min_tier for c in result.claims if c.source_url)
 
 
 def accepted(problems: list[str], verdict: CriticVerdict) -> bool:
