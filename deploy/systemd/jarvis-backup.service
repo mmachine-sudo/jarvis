@@ -1,0 +1,6 @@
+[Unit]
+Description=Jarvis backup (restic → B2)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '/opt/jarvis/deploy/notify.sh "$(/opt/jarvis/deploy/backup.sh 2>&1 | tail -1)"'

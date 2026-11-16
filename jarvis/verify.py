@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from .card import Result, TaskCard, TaskClass
 from .config import Settings
-from .gateway import Gateway, Reply, as_messages, vendor_of
+from .gateway import AllCandidatesFailed, Gateway, Reply, as_messages, vendor_of
 from .guard import leaks_secret, redact
 from .prompts import CRITIC_SYSTEM, owner_block
 
@@ -49,15 +49,40 @@ def checklist(card: TaskCard, result: Result) -> list[str]:
 
 
 async def critic_review(card: TaskCard, result: Result, author_model: str, *, gw: Gateway,
-                        settings: Settings) -> tuple[CriticVerdict, Reply]:
+                        settings: Settings, exclude: tuple[str, ...] | None = None) -> tuple[CriticVerdict, Reply]:
     system = CRITIC_SYSTEM.format(owner=owner_block(settings.owner.rules))
     user = {"карточка": {"цель": card.goal, "образ_результата": card.result_image,
                          "критерии": card.acceptance, "класс": card.cls.value},
             "результат": redact(result.model_dump_json())}
     reply = await gw.chat("critic", as_messages(system, user), task_id=card.id, schema=CriticVerdict,
-                          exclude_vendors=(vendor_of(author_model),), task_cap=card.budget.usd_cap,
+                          exclude_vendors=exclude if exclude is not None else (vendor_of(author_model),), task_cap=card.budget.usd_cap,
                           max_tokens=900, temperature=0.0)
     return reply.data, reply
+
+
+async def consilium_review(card: TaskCard, result: Result, author_model: str, *, gw: Gateway,
+                           settings: Settings, size: int = 3) -> tuple[CriticVerdict, list[Reply]]:
+    """Консилиум для класса A (урок MMachine): до трёх критиков разных вендоров, слепо, автор исключён.
+    Принято: не меньше двух состоявшихся голосов, большинство «за» и ни одного major/critical."""
+    used = [vendor_of(author_model)] if author_model else []
+    votes: list[CriticVerdict] = []
+    replies: list[Reply] = []
+    for _ in range(size):
+        try:
+            v, r = await critic_review(card, result, author_model, gw=gw, settings=settings, exclude=tuple(used))
+        except AllCandidatesFailed:  # больше нет вендоров или все отказали — решаем по тем голосам, что есть
+            break
+        votes.append(v)
+        replies.append(r)
+        used.append(vendor_of(r.model))
+    issues = [i for v in votes for i in v.issues]
+    blocking = [v for v in votes if v.severity in ("major", "critical")]
+    yes = sum(1 for v in votes if v.passed and v.severity in ("none", "minor"))
+    ok = len(votes) >= 2 and yes * 2 > len(votes) and not blocking
+    worst = max((v.severity for v in votes), key=["none", "minor", "major", "critical"].index, default="critical")
+    if len(votes) < 2:
+        issues.append(f"Консилиум не собрался: состоялось голосов {len(votes)} из 2 нужных")
+    return CriticVerdict(passed=ok, severity=worst if votes else "critical", issues=issues), replies
 
 
 def accepted(problems: list[str], verdict: CriticVerdict) -> bool:

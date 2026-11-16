@@ -15,6 +15,7 @@ from .config import Settings
 from .gateway import AllCandidatesFailed, Gateway, LocalOnlyGateway, ProviderPaused, Reply
 from .guard import Guard
 from .intake import draft_card
+from .rework import Rework, place_of
 from .router import needs_local
 from .journal import Journal
 from .memory import Memory
@@ -22,7 +23,7 @@ from .modes import ExecContext, run_solo, run_team
 from .reader import QuarantineReader, Searcher
 from .store import Store
 from .treasury import BudgetExceeded
-from .verify import accepted, checklist, critic_review
+from .verify import accepted, checklist, consilium_review, critic_review
 
 ACTIVE = ["new", "ready", "executing", "verifying", "rework"]
 TERMINAL = {"done", "cancelled", "failed"}
@@ -43,6 +44,7 @@ class Orchestrator:
         self.s, self.store, self.gw = settings, store, gw
         self.memory, self.journal, self.guard, self.notifier = memory, journal, guard, notifier
         self.reader, self.searcher = reader, searcher
+        self.rework = Rework(store)
 
     # --- вход ----------------------------------------------------------------------
     def submit(self, request: str) -> str:
@@ -169,17 +171,26 @@ class Orchestrator:
         payload = Store.loads(t["result_json"], {})
         result = Result.model_validate(payload["result"])
         problems = checklist(card, result)
-        verdict, reply = await critic_review(card, result, payload.get("author", ""), gw=self._gw_for(card),
-                                             settings=self.s)
-        self.store.add_step(tid, "verify", "critic",
-                            f"чек-лист: {len(problems)} нарушений; критик: {verdict.severity}", reply.model, reply.usd)
+        if card.cls == TaskClass.A:  # консилиум: до трёх вендоров, большинство и ни одного major/critical
+            verdict, replies = await consilium_review(card, result, payload.get("author", ""),
+                                                      gw=self._gw_for(card), settings=self.s)
+            for r in replies:
+                self.store.add_step(tid, "verify", "consilium", f"голос {r.model}", r.model, r.usd)
+            self.store.add_step(tid, "verify", "consilium",
+                                f"чек-лист: {len(problems)} нарушений; консилиум ({len(replies)}): "
+                                f"{'принято' if verdict.passed else 'не принято'}, худшее — {verdict.severity}")
+        else:
+            verdict, reply = await critic_review(card, result, payload.get("author", ""), gw=self._gw_for(card),
+                                                 settings=self.s)
+            self.store.add_step(tid, "verify", "critic",
+                                f"чек-лист: {len(problems)} нарушений; критик: {verdict.severity}", reply.model, reply.usd)
         if accepted(problems, verdict):
             await self._finish(tid, card, result, verdict.issues, payload.get("security", []))
             return
         issues = problems + verdict.issues
         rnd = int(t["round"] or 0) + 1
-        for issue in issues[:3]:
-            self.memory.propose_lesson(issue, tid)  # кандидаты в плейбук, в работу — только через ворота
+        # учёт потерь на доработке; причины раз в сутки сводит Rework.daily_review в кандидаты плейбука
+        self.rework.log_round(tid, place_of(card.mode.value, card.cls.value), rnd, issues)
         if rnd > card.budget.max_rounds:
             aid = self.store.add_approval(tid, "escalation", {"issues": issues})
             self.store.update_task(tid, status="awaiting_owner", round=rnd, issues_json=issues,
@@ -221,6 +232,10 @@ class Orchestrator:
             parts.append("Источники:\n" + "\n".join(f"• [{c.tier}] {c.source_url}" for c in srcs))
         if card.forecast_question and result.forecast_p is not None:
             parts.append(f"Прогноз в журнал: «{card.forecast_question}» — p = {result.forecast_p:.2f}")
+            adj = self.journal.adjust(result.forecast_p)
+            if adj["active"] and abs(adj["p"] - result.forecast_p) >= 0.05:
+                parts.append(f"С поправкой на историю прогнозов ({adj['bin_n']} похожих, сбылось "
+                             f"{adj['bin_hit_rate']:.0%}): p ≈ {adj['p']:.2f}")
         if minor:
             parts.append("Мелкие замечания критика:\n" + "\n".join(f"• {x}" for x in minor[:3]))
         if security:

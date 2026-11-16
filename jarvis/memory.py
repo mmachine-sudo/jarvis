@@ -120,12 +120,13 @@ class Memory:
         self.store.x("INSERT INTO episodes(task_id,summary,created_at) VALUES(?,?,?)",
                      (task_id, summary[:2000], now_iso()))
 
-    def propose_lesson(self, text: str, source_task: str) -> None:
-        """Кандидат в плейбук из причин доработки. В работу — только через ворота."""
-        exists = self.store.one("SELECT id FROM playbook WHERE text=?", (text,))
-        if not exists:
-            self.store.x("INSERT INTO playbook(text,status,source_task,created_at) VALUES(?,?,?,?)",
-                         (text[:500], "candidate", source_task, now_iso()))
+    def propose_lesson(self, text: str, source_task: str) -> bool:
+        """Кандидат в плейбук. В работу — только через ворота владельца. True — если кандидат новый."""
+        if self.store.one("SELECT id FROM playbook WHERE text=?", (text[:500],)):
+            return False
+        self.store.x("INSERT INTO playbook(text,status,source_task,created_at) VALUES(?,?,?,?)",
+                     (text[:500], "candidate", source_task, now_iso()))
+        return True
 
     def lessons(self, status: str = "active") -> list[dict]:
         return self.store.all("SELECT * FROM playbook WHERE status=? ORDER BY id", (status,))

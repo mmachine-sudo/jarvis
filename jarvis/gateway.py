@@ -51,14 +51,34 @@ _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
 
 
 def extract_json(text: str) -> str:
-    """Достаёт JSON-объект из ответа: убирает ```-обёртки и текст вокруг."""
+    """Достаёт JSON-объект из ответа: убирает ```-обёртки и текст вокруг.
+
+    Уроки MMachine: модель дописывает текст после объекта (берём первый целый объект),
+    ставит висячие запятые (убираем). Оборванный ответ не «достраиваем» — это ошибка.
+    """
     m = _FENCE.search(text)
     if m:
         text = m.group(1)
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
-        raise ValueError("в ответе нет JSON-объекта")
-    return text[start:end + 1]
+        raise ValueError("ответ оборван: JSON начат, но не закрыт" if start != -1 else "в ответе нет JSON-объекта")
+    whole = text[start:end + 1]
+    try:
+        json.loads(whole)
+        return whole
+    except ValueError:
+        pass
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(text[start:])
+        return json.dumps(obj, ensure_ascii=False)
+    except ValueError:
+        pass
+    fixed = re.sub(r",\s*([}\]])", r"\1", whole)
+    try:
+        json.loads(fixed)
+        return fixed
+    except ValueError:
+        return whole  # пусть валидатор схемы скажет, что именно не так
 
 
 class Gateway(Protocol):

@@ -72,7 +72,8 @@ async def test_rework_twice_then_escalate(make_orch, store):
     assert t["status"] == "awaiting_owner"
     assert gw.roles().count("solo") == 3  # исходный + 2 доработки
     assert "после 2 кругов" in note.last[0]
-    assert orch.memory.lessons("candidate")  # причины доработки → кандидаты в плейбук
+    rows = store.all("SELECT * FROM rework WHERE task_id=?", (tid,))  # каждый круг доработки учтён с ценой
+    assert len(rows) == 3 and all(r["place"] == "solo|C" for r in rows) and sum(r["usd"] for r in rows) > 0
     # замечания передаются исполнителю при доработке
     solo_calls = [c for c in gw.calls if c["role"] == "solo"]
     assert "Нет сравнения вариантов" in solo_calls[1]["messages"][1]["content"]

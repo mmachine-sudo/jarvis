@@ -79,6 +79,11 @@ async def tick_schedule(app: App, now: datetime) -> None:
                              f"Jarvis давал p = {e['p']:.2f}. Сбылось?",
                              [("Да, сбылось", f"jr:{e['id']}:1"), ("Нет", f"jr:{e['id']}:0")])
     day = now.date().isoformat()
+    if now.hour == 21 and app.store.get("rework_review_day") != day:  # вечерний разбор доработок
+        app.store.set("rework_review_day", day)
+        text = await app.orch.rework.daily_review(app.gateway, app.memory)
+        if text:
+            await app.bot.notify(text)
     if now.hour == 8 and now.minute >= 30 and app.store.get("summary_day") != day:
         app.store.set("summary_day", day)
         await app.bot.notify("☀️ Утренняя сводка\n" + app.bot.status_text())

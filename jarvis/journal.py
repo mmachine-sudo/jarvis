@@ -59,3 +59,21 @@ class Journal:
                             "средняя_p": round(sum(r["p"] for r in group) / len(group), 2),
                             "сбылось": round(sum(r["outcome"] for r in group) / len(group), 2)})
         return out
+
+    def adjust(self, p: float, *, bins: int = 5, min_resolved: int = 10, min_in_bin: int = 3,
+               prior: float = 3.0) -> dict:
+        """Поправка прогноза по своей истории (перенесено из MMachine prob.calib_factor).
+
+        В корзине, куда попадает p, смотрим, как часто такие прогнозы сбывались, и сглаживаем prior
+        псевдонаблюдениями «как обещали», чтобы 1–2 исхода не качали поправку. Сырой p в журнале не меняется —
+        Brier считается честно по тому, что Jarvis сказал."""
+        p = min(max(float(p), 0.0), 1.0)
+        rows = self.entries(resolved=True)
+        i = min(int(p * bins), bins - 1)
+        group = [r for r in rows if min(int(r["p"] * bins), bins - 1) == i]
+        if len(rows) < min_resolved or len(group) < min_in_bin:
+            return {"p": p, "active": False, "n": len(rows)}
+        hits = sum(r["outcome"] for r in group)
+        adj = (hits + prior * p) / (len(group) + prior)
+        return {"p": round(min(max(adj, 0.01), 0.99), 3), "active": True, "n": len(rows), "bin_n": len(group),
+                "bin_hit_rate": round(hits / len(group), 2)}

@@ -46,8 +46,8 @@ SXN=$(curl -s -m 30 "http://127.0.0.1:8888/search?q=thailand+visa&format=json" |
 # службы
 install -m 644 $APP/deploy/systemd/*.service $APP/deploy/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable -q jarvis jarvis-deploy.timer jarvis-secrets-watch.timer
-systemctl start jarvis-deploy.timer jarvis-secrets-watch.timer
+systemctl enable -q jarvis jarvis-deploy.timer jarvis-secrets-watch.timer jarvis-backup.timer
+systemctl start jarvis-deploy.timer jarvis-secrets-watch.timer jarvis-backup.timer
 /opt/jarvis/deploy/secrets.sh | sha256sum | cut -c1-32 > $DATA/.secrets.hash
 
 # проверка перед запуском: выводит только «есть/нет» и id моделей, без значений секретов
@@ -56,4 +56,6 @@ DOC=$(echo "$DOCALL" | grep -E '✗|!|Error|error' | head -6 | tr '\n' ' ' | cut
 systemctl restart jarvis; sleep 12
 systemctl is-active --quiet jarvis || { echo "doctor: $(echo "$DOCALL" | tail -n 8 | tr '\n' ' ' | cut -c1-400)"; journalctl -u jarvis -n 40 --no-pager -o cat | grep -v '^ *$' | tail -n 8; echo "jarvis: НЕ ЗАПУСТИЛСЯ · doctor: ${DOC:-ок}"; exit 1; }
 git -C $APP rev-parse --short HEAD > $DATA/.deployed-commit
-echo "jarvis: работает · поиск SearXNG ${SXN:-0} · doctor: ${DOC:-всё ок}"
+# бэкап: первый — сразу, дальше по таймеру; ошибка бэкапа выкладку не валит
+if [ -f $DATA/.last-backup ]; then BK="бэкап: последний $(cat $DATA/.last-backup)"; else BK=$($APP/deploy/backup.sh 2>&1 | tail -1); fi
+echo "jarvis: работает · поиск SearXNG ${SXN:-0} · doctor: ${DOC:-всё ок} · $BK"

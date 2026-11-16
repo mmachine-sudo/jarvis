@@ -1,0 +1,9 @@
+[Unit]
+Description=Jarvis backup ежедневно
+
+[Timer]
+OnCalendar=*-*-* 22:10:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

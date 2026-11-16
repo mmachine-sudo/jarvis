@@ -1,0 +1,74 @@
+"""Перенесённое из MMachine: разбор JSON, консилиум класса A, учёт и разбор доработок, калибровка прогнозов."""
+import pytest
+
+from jarvis.gateway import extract_json
+from jarvis.journal import Journal
+from jarvis.memory import Memory
+from jarvis.rework import Rework
+from jarvis.store import Store
+from jarvis.verify import consilium_review
+
+from .conftest import ScriptedGateway, card, result, verdict  # noqa: F401
+
+
+def _card_a():
+    from jarvis.card import TaskBudget, TaskCard, TaskClass
+    return TaskCard(id="T-1", goal="Цель", result_image="Ответ", cls=TaskClass.A, budget=TaskBudget(usd_cap=1.0))
+
+
+def test_extract_json_lessons_from_mmachine():
+    assert extract_json('Вот: {"a": 1} и ещё {"b": 2} — готово') == '{"a": 1}'
+    assert extract_json('```json\n{"a": [1, 2,],}\n```') == '{"a": [1, 2]}'
+    with pytest.raises(ValueError, match="оборван"):
+        extract_json('{"a": 1, "b": "не закры')
+
+
+async def test_consilium_needs_majority_and_no_blocking(settings):
+    from jarvis.card import Result
+    c, r = _card_a(), Result.model_validate(result())
+    ScriptedGateway.MODELS = dict(ScriptedGateway.MODELS, critic=["openai/gpt-6-luna", "google/gemini-3.8-flash",
+                                                                   "x-ai/grok-5"])
+    try:
+        ok = ScriptedGateway({"critic": [verdict(True), verdict(True), verdict(False, "minor", ["стиль"])]})
+        v, replies = await consilium_review(c, r, "anthropic/claude-sonnet-5.5", gw=ok, settings=settings)
+        assert v.passed and len(replies) == 3
+        assert len({x["exclude"] for x in ok.calls}) == 3  # каждый следующий голос — другой вендор
+
+        bad = ScriptedGateway({"critic": [verdict(True), verdict(True), verdict(False, "major", ["ошибка в сумме"])]})
+        v, _ = await consilium_review(c, r, "anthropic/claude-sonnet-5.5", gw=bad, settings=settings)
+        assert not v.passed and "ошибка в сумме" in v.issues
+    finally:
+        ScriptedGateway.MODELS = {"critic": ["openai/gpt-6-luna", "google/gemini-3.8-flash"],
+                                  "worker": ["deepseek/deepseek-v4.1-flash"]}
+
+
+async def test_consilium_does_not_pass_on_single_vote(settings):
+    from jarvis.card import Result
+    c, r = _card_a(), Result.model_validate(result())
+    gw = ScriptedGateway({"critic": [verdict(True)]})
+    # автор — openai, у критика остаётся только google: один голос → не принято
+    v, replies = await consilium_review(c, r, "openai/gpt-6-luna", gw=gw, settings=settings)
+    assert len(replies) == 1 and not v.passed and any("не собрался" in i for i in v.issues)
+
+
+async def test_rework_ledger_and_daily_review(store):
+    rw, mem = Rework(store), Memory(store)
+    store.x("INSERT INTO steps(task_id,kind,actor,detail,cost_usd,created_at) VALUES('T-1','x','y','z',0.04,'t')")
+    assert rw.log_round("T-1", "team|B", 1, ["нет источника"]) == pytest.approx(0.04)
+    store.x("INSERT INTO steps(task_id,kind,actor,detail,cost_usd,created_at) VALUES('T-1','x','y','z',0.03,'t')")
+    assert rw.log_round("T-1", "team|B", 2, ["нет источника у цены"]) == pytest.approx(0.03)  # только новый круг
+    gw = ScriptedGateway({"worker": [{"rules": ["У каждой цены — ссылка на источник", "У каждой цены — ссылка на источник"]}]})
+    text = await rw.daily_review(gw, mem)
+    assert "2 кругов" in text and "team|B" in text and "ссылка на источник" in text
+    assert [x["text"] for x in mem.lessons("candidate")] == ["У каждой цены — ссылка на источник"]  # без дублей
+    assert await Rework(Store(":memory:")).daily_review(gw, mem) is None
+
+
+def test_journal_calibration_adjusts_overconfidence(store):
+    j = Journal(store)
+    assert j.adjust(0.9)["active"] is False  # мало истории — без поправки
+    for i in range(12):
+        eid = j.add(f"T-{i}", "q", 0.9)
+        j.resolve(eid, happened=i < 6)  # говорили 90%, сбылось 50%
+    a = j.adjust(0.9)
+    assert a["active"] and 0.5 < a["p"] < 0.9
