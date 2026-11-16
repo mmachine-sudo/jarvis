@@ -72,18 +72,26 @@ class Orchestrator:
         for t in self.store.tasks(statuses=ACTIVE, limit=20):
             if self.guard.stopped():
                 break
-            try:
-                await self.advance(t["id"])
-                advanced += 1
-            except BudgetExceeded as e:
-                await self._budget_exceeded(t["id"], e)
-            except ProviderPaused as e:
-                self.store.add_step(t["id"], "paused", "gateway", str(e))
-                await self.notifier.notify(f"⏸ {e}. Задачи ждут; после пополнения напиши /resume_models.")
+            ok = await self.step(t["id"])
+            if ok is None:
                 break
-            except AllCandidatesFailed as e:
-                await self._models_failed(t["id"], e)
+            advanced += ok
         return advanced
+
+    async def step(self, tid: str) -> bool | None:
+        """Один шаг задачи с обработкой сбоев. True — продвинута, False — сбой обработан, None — пауза провайдера."""
+        try:
+            await self.advance(tid)
+            return True
+        except BudgetExceeded as e:
+            await self._budget_exceeded(tid, e)
+        except ProviderPaused as e:
+            self.store.add_step(tid, "paused", "gateway", str(e))
+            await self.notifier.notify(f"⏸ {e}. Задачи ждут; после пополнения напиши /resume_models.")
+            return None
+        except AllCandidatesFailed as e:
+            await self._models_failed(tid, e)
+        return False
 
     async def advance(self, tid: str) -> None:
         t = self.store.task(tid)

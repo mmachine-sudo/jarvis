@@ -93,3 +93,49 @@ def test_inherit_report_aggregates_only(tmp_path):
     text = "\n".join(report_lines(analyze(str(db))))
     assert "openai/x: 30 вызовов, успешно 90%" in text and "429/лимит 3" in text
     assert "scout 1 кр." in text and "Иванов" not in text and "покупателя" not in text
+
+
+def test_finding_accepts_loose_model_output():
+    from jarvis.modes import Finding
+    f = Finding.model_validate({"finding": "x", "claims": ["факт без ссылки", {"text": "с ссылкой", "source_url": "https://a.go.th"}],
+                                "confidence": "высокая"})
+    assert [c.text for c in f.claims] == ["факт без ссылки", "с ссылкой"] and f.confidence == 0.8
+    assert Finding.model_validate({"finding": "x", "confidence": "70%"}).confidence == 0.7
+
+
+async def test_truncated_json_is_retried_with_more_tokens():
+    import httpx, json as _json
+    from pydantic import BaseModel
+    from jarvis.config import Settings
+    from jarvis.gateway import ModelGateway
+    from jarvis.treasury import Treasury
+    seen = []
+
+    def handler(req):
+        body = _json.loads(req.content)
+        seen.append(body["max_tokens"])
+        if len(seen) == 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"a": "обор'},
+                                                          "finish_reason": "length"}], "usage": {"cost": 0.001}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"a": "ok"}'}}], "usage": {"cost": 0.001}})
+
+    class A(BaseModel):
+        a: str
+    s = Settings(); s.openrouter_api_key = "t"
+    store = Store()
+    gw = ModelGateway(s, Treasury(store, s.budget), store, transport=httpx.MockTransport(handler))
+    r = await gw.chat("worker", [{"role": "user", "content": "x"}], schema=A, max_tokens=500)
+    assert r.data.a == "ok" and seen == [500, 1000]
+
+
+async def test_team_survives_one_failed_subtask(make_orch, store):
+    from jarvis.gateway import AllCandidatesFailed
+    from .conftest import PLAN, FINDING
+    orch, gw, note = make_orch({"card": [card("B")], "planner": [PLAN],
+                                "worker": [AllCandidatesFailed("модели не ответили"), FINDING],
+                                "synth": [result()], "critic": [verdict(True)]})
+    tid = orch.submit("Сравни два варианта страховки")
+    for _ in range(10):
+        await orch.run_pending()
+    assert store.task(tid)["status"] == "done"
+    assert any("подзадача без ответа" in s["detail"] for s in store.steps(tid))

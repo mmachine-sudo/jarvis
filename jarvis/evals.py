@@ -47,7 +47,8 @@ async def run_online(app, cases: list[dict], max_ticks: int = 30,
                 app.orch.answer_clarification(tid, c.get("clarify_answer", "Действуй на своё усмотрение."))
             if t["status"] in ("done", "awaiting_owner", "cancelled", "failed"):
                 break
-            await app.orch.advance(tid)
+            if await app.orch.step(tid) is None:  # пауза провайдера — дальше гнать бессмысленно
+                break
         t = app.store.task(tid)
         spent = sum(x["cost_usd"] or 0 for x in app.store.steps(tid))
         expect = c.get("expect_final", ["done", "awaiting_owner"])

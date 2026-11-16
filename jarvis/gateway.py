@@ -165,6 +165,10 @@ class ModelGateway:
                 try:
                     data = schema.model_validate_json(extract_json(text))
                 except (ValueError, ValidationError) as e:
+                    finish = ((body.get("choices") or [{}])[0] or {}).get("finish_reason")
+                    if attempt == 0 and finish == "length":
+                        tokens *= 2  # ответ упёрся в лимит токенов — тот же запрос с большим лимитом
+                        continue
                     errors.append(f"{model}: JSON не по схеме ({str(e).splitlines()[0][:120]})")
                     break  # урок MMachine: сломанный JSON → следующий кандидат
                 return Reply(text, data, model, vendor_of(model), usd)

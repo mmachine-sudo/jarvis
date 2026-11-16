@@ -9,11 +9,11 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .card import Claim, Result, TaskCard
 from .config import Settings
-from .gateway import Gateway, ModelError, Reply, as_messages
+from .gateway import AllCandidatesFailed, Gateway, ModelError, ProviderPaused, Reply, as_messages
 from .memory import tier_of
 from .prompts import PLANNER_SYSTEM, SOLO_SYSTEM, SYNTH_SYSTEM, WORKER_SYSTEM, owner_block
 from .reader import Evidence, QuarantineReader, Searcher
@@ -36,6 +36,26 @@ class Finding(BaseModel):
     finding: str
     claims: list[Claim] = Field(default_factory=list)
     confidence: float = 0.5
+
+    # модели часто отдают утверждения строками и уверенность словами — принимаем, а не роняем подзадачу
+    @field_validator("claims", mode="before")
+    @classmethod
+    def _claims(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [{"text": x} if isinstance(x, str) else x for x in v if isinstance(x, (str, dict))]
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _confidence(cls, v):
+        words = {"высокая": 0.8, "high": 0.8, "средняя": 0.5, "medium": 0.5, "низкая": 0.2, "low": 0.2}
+        if isinstance(v, str):
+            v = words.get(v.strip().lower(), v.strip().rstrip("%"))
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            return 0.5
+        return min(max(x / 100 if x > 1 else x, 0.0), 1.0)
 
 
 @dataclass
@@ -124,15 +144,18 @@ async def run_team(ctx: ExecContext) -> Result:
         user = {"подвопрос": sub.question, "контекст_задачи": card.goal,
                 "EVIDENCE": [e.model_dump() for e in evidence]}
         r = await ctx.gw.chat("worker", as_messages(WORKER_SYSTEM, user), task_id=card.id,
-                              schema=Finding, task_cap=ctx.cap, max_tokens=1200)
+                              schema=Finding, task_cap=ctx.cap, max_tokens=2000)
         ctx.log("subtask", "worker", f"{sub.title}: готово", r)
         return sub, r.data, evidence
 
     results = await asyncio.gather(*(one(s) for s in subs), return_exceptions=True)
     findings = []
     for res in results:
-        if isinstance(res, (BudgetExceeded, ModelError)):
+        if isinstance(res, (BudgetExceeded, ProviderPaused)):
             raise res
+        if isinstance(res, AllCandidatesFailed):  # одна подзадача не далась моделям — остальные продолжают
+            ctx.log("subtask", "worker", f"подзадача без ответа: {str(res)[:200]}", None)
+            continue
         if isinstance(res, BaseException):
             ctx.log("subtask", "worker", f"подзадача упала: {type(res).__name__}", None)
             continue
@@ -141,6 +164,8 @@ async def run_team(ctx: ExecContext) -> Result:
                          "утверждения": [c.model_dump() for c in f.claims], "уверенность": f.confidence,
                          "источники": [{"url": e.url, "уровень": e.tier} for e in evidence]})
 
+    if subs and not findings:
+        raise AllCandidatesFailed("ни одна подзадача не получила ответа от моделей")
     synth_user = ctx.task_payload() | {"находки_субагентов": findings}
     if ctx.security_flags:
         synth_user["предупреждения_безопасности"] = ctx.security_flags
