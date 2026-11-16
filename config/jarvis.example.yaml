@@ -42,12 +42,15 @@ models:
   # kimi-k3.1-pro (76%) и прямой ключ Gemini (0%: нет квоты) не используем.
   card:    [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
   solo:    [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
+  # бытовые задачи класса C: дешёвая модель, укладывается в лимит $0.02
+  solo_cheap: [deepseek/deepseek-v4.1-flash, anthropic/claude-haiku-5.5]
   planner: [anthropic/claude-sonnet-5.5, openai/gpt-6.1-sol]
   worker:  [deepseek/deepseek-v4.1-flash, anthropic/claude-haiku-5.5]
   # сводка — самый длинный JSON; в эталонах 16.11 Sonnet на ней обрывался и стоил лишних $0.17 на задачу
   synth:   [openai/gpt-6.1-sol, anthropic/claude-sonnet-5.5]
   # критики четырёх вендоров: консилиум класса A собирает 3 голоса, даже когда автор — один из них
-  critic:  [openai/gpt-6.1-sol, google/gemini-4-argon, x-ai/grok-4.7, anthropic/claude-sonnet-5.5]
+  # grok последним: 40 с на ответ, класс A не укладывался по времени (эталоны 16.11)
+  critic:  [openai/gpt-6.1-sol, google/gemini-4-argon, anthropic/claude-sonnet-5.5, x-ai/grok-4.7]
   reader:  [anthropic/claude-haiku-5.5, google/gemini-4-argon]
 router:
   class_a_keywords: [деньг, перевод, перевести, оплат, купить, продать, вывод, usdt, крипт,

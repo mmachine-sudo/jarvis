@@ -100,7 +100,8 @@ def stamp_tiers(result: Result, settings: Settings) -> Result:
 
 async def run_solo(ctx: ExecContext) -> Result:
     system = SOLO_SYSTEM.replace("{owner}", ctx.owner())
-    reply = await ctx.gw.chat("solo", as_messages(system, ctx.task_payload()), task_id=ctx.card.id,
+    role = "solo_cheap" if ctx.card.cls.value == "C" and ctx.settings.models.get("solo_cheap") else "solo"
+    reply = await ctx.gw.chat(role, as_messages(system, ctx.task_payload()), task_id=ctx.card.id,
                               schema=Result, task_cap=ctx.cap, max_tokens=4000)
     ctx.log("execute", "solo", f"ответ получен ({len(reply.data.answer)} симв.)", reply)
     ctx.author = reply.model

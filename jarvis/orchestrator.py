@@ -214,7 +214,7 @@ class Orchestrator:
 
     async def _finish(self, tid: str, card: TaskCard, result: Result, minor: list[str], security: list[str]) -> None:
         text = self._render(tid, card, result, minor, security)
-        if card.cls == TaskClass.A or result.owner_actions:
+        if card.cls == TaskClass.A:  # B и C — обратимое: результат сразу, «что делаешь ты» — списком в ответе
             aid = self.store.add_approval(tid, "decision", {})
             self.store.update_task(tid, status="awaiting_owner", note="ждёт решения владельца")
             await self.notifier.notify(text, buttons_for(aid, [("Принять", "accept"), ("Доработать", "rework"),

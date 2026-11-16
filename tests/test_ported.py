@@ -162,3 +162,27 @@ async def test_reply_cost_includes_failed_attempts():
     gw = ModelGateway(s, Treasury(store, s.budget), store, transport=httpx.MockTransport(handler))
     r = await gw.chat("solo", [{"role": "user", "content": "x"}], schema=A)
     assert r.usd == pytest.approx(0.10)  # и неудачная попытка видна в цене шага
+
+
+def test_class_c_cap_allows_calls_after_first(store):
+    from jarvis.config import Settings
+    from jarvis.treasury import Treasury
+    s = Settings()
+    t = Treasury(store, s.budget)
+    t.record("T-9", "m", 0.004)
+    t.check("T-9", 0.02, task_cap=0.02)  # оценка 0.02 урезается до 0.005 — вызов разрешён
+    t.record("T-9", "m", 0.015)
+    with pytest.raises(Exception):
+        t.check("T-9", 0.02, task_cap=0.02)
+
+
+async def test_class_b_with_owner_actions_does_not_block(make_orch, store):
+    orch, gw, note = make_orch({"card": [card("B")], "planner": [__import__("tests.conftest", fromlist=["PLAN"]).PLAN],
+                                "worker": [__import__("tests.conftest", fromlist=["FINDING"]).FINDING],
+                                "synth": [result(actions=["Позвонить в иммиграционный офис"])],
+                                "critic": [verdict(True)]})
+    tid = orch.submit("Сравни два тарифа связи")
+    for _ in range(10):
+        await orch.run_pending()
+    assert store.task(tid)["status"] == "done"
+    assert "Что делаешь ты" in note.last[0]

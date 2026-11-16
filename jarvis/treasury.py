@@ -49,7 +49,9 @@ class Treasury:
             raise BudgetExceeded("месяц", month, self.cfg.month_usd)
         if task_cap is not None and task_id:
             spent = self.spent_task(task_id)
-            if spent + est_usd > task_cap:
+            # оценка вызова не больше четверти лимита задачи: иначе задача класса C ($0.02) не могла сделать
+            # ни одного вызова после первого (эталоны 16.11: «исчерпан $0.00 из $0.02»)
+            if spent + min(est_usd, task_cap / 4) > task_cap:
                 raise BudgetExceeded(f"задача {task_id}", spent, task_cap)
 
     def record(self, task_id: str | None, model: str, usd: float) -> None:

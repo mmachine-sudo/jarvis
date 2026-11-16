@@ -8,7 +8,7 @@ def report(path: str) -> list[str]:
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     out = []
-    for t in con.execute("SELECT id, status, cls, round, note, request FROM tasks ORDER BY created_at"):
+    for t in con.execute("SELECT id, status, cls, round, note, request, issues_json FROM tasks ORDER BY created_at"):
         steps = con.execute("SELECT kind, actor, model, cost_usd, detail, created_at FROM steps WHERE task_id=? "
                             "ORDER BY id", (t["id"],)).fetchall()
         usd = sum(s["cost_usd"] or 0 for s in steps)
@@ -24,6 +24,8 @@ def report(path: str) -> list[str]:
             n, c = kinds.get(k, (0, 0.0))
             kinds[k] = (n + 1, c + (s["cost_usd"] or 0))
         out.append("   " + "; ".join(f"{k}×{n} ${c:.3f}" for k, (n, c) in kinds.items()))
+        if t["issues_json"] and t["status"] != "done":
+            out.append("   замечания: " + str(t["issues_json"])[:600])
         for s in steps[-4:]:
             out.append(f"   …{s['created_at'][11:19]} {s['kind']}/{s['actor']} {s['model'] or ''}: {(s['detail'] or '')[:160]}")
     by_model = con.execute("SELECT model, COUNT(*) n, ROUND(SUM(usd),3) usd FROM spend GROUP BY model ORDER BY usd DESC")
