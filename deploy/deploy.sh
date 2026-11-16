@@ -16,10 +16,11 @@ MSG=$(git -C $APP log -1 --format=%s | cut -c1-120)
 OUT=$($APP/deploy/apply.sh 2>&1); RC=$?
 echo "$(date -u +%FT%TZ) $NEW rc=$RC"$'\n'"$OUT" >> $LOG
 LAST=$(echo "$OUT" | tail -n 1)
+[ $RC -ne 0 ] && LAST="$LAST · $(echo "$OUT" | tail -n 12 | head -n 11 | tr '\n' ' ' | tr -d '\000-\010\013-\037' | cut -c1-900)"
 if [ $RC -ne 0 ] && [ -n "$OLD" ]; then
   git -C $APP reset -q --hard "$OLD"
   $APP/deploy/apply.sh >> $LOG 2>&1 || true
-  LAST="$LAST · ОТКАТ на $OLD · $(echo "$OUT" | tail -n 6 | head -n 5 | tr '\n' ' ' | cut -c1-400)"
+  LAST="$LAST · ОТКАТ на $OLD"
 fi
 $APP/deploy/notify.sh "выкладка $NEW · $MSG · $LAST · диск $(df -h / | awk 'NR==2{print $5}') · память своб. $(free -m | awk '/Mem/{print $7}') МБ" \
   "Jarvis — сервер · $([ $RC -eq 0 ] && echo ок || echo СБОЙ) · $(date -u +'%Y-%m-%d %H:%M UTC') · $NEW"

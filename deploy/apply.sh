@@ -46,8 +46,9 @@ systemctl start jarvis-deploy.timer jarvis-secrets-watch.timer
 /opt/jarvis/deploy/secrets.sh | sha256sum | cut -c1-32 > $DATA/.secrets.hash
 
 # проверка перед запуском: выводит только «есть/нет» и id моделей, без значений секретов
-DOC=$($APP/deploy/run.sh doctor 2>&1 | tr -cd '[:print:]\n' | grep -E '✗|!' | head -6 | tr '\n' ' ' | cut -c1-500 || true)
+DOCALL=$($APP/deploy/run.sh doctor 2>&1 || true)
+DOC=$(echo "$DOCALL" | grep -E '✗|!|Error|error' | head -6 | tr '\n' ' ' | cut -c1-500 || true)
 systemctl restart jarvis; sleep 12
-systemctl is-active --quiet jarvis || { journalctl -u jarvis -n 20 --no-pager -o cat | tail -n 8; echo "jarvis: НЕ ЗАПУСТИЛСЯ · doctor: ${DOC:-ок}"; exit 1; }
+systemctl is-active --quiet jarvis || { echo "doctor: $(echo "$DOCALL" | tail -n 8 | tr '\n' ' ' | cut -c1-400)"; journalctl -u jarvis -n 40 --no-pager -o cat | grep -v '^ *$' | tail -n 8; echo "jarvis: НЕ ЗАПУСТИЛСЯ · doctor: ${DOC:-ок}"; exit 1; }
 git -C $APP rev-parse --short HEAD > $DATA/.deployed-commit
 echo "jarvis: работает · поиск SearXNG ${SXN:-0} · doctor: ${DOC:-всё ок}"
