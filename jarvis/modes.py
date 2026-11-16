@@ -80,6 +80,8 @@ class ExecContext:
     searcher: Searcher | None = None
     security_flags: list[str] = field(default_factory=list)
     author: str = ""  # модель, написавшая итоговый результат (критик будет другого вендора)
+    prior_findings: list = field(default_factory=list)  # находки прошлого круга: доработка без повторного поиска
+    findings: list = field(default_factory=list)
 
     @property
     def cap(self) -> float:
@@ -143,6 +145,12 @@ async def _research(ctx: ExecContext, sub: SubTask) -> list[Evidence]:
 
 async def run_team(ctx: ExecContext) -> Result:
     card = ctx.card
+    if ctx.rework_notes and ctx.prior_findings:
+        # доработка по замечаниям: исследование уже есть — пересобираем только сводку (эталоны 16.11:
+        # полный повтор поиска на каждом круге давал 15 минут и $0.5 на задачу класса A)
+        ctx.findings = ctx.prior_findings
+        ctx.log("plan", "jarvis", "доработка: сводка заново по прежним находкам и замечаниям", None)
+        return await _synthesize(ctx, ctx.prior_findings)
     planner = PLANNER_SYSTEM.format(fanout=card.budget.fanout_cap, owner=ctx.owner())
     plan_reply = await ctx.gw.chat("planner", as_messages(planner, ctx.task_payload()), task_id=card.id,
                                    schema=Plan, task_cap=ctx.cap, max_tokens=900)
@@ -176,6 +184,12 @@ async def run_team(ctx: ExecContext) -> Result:
 
     if subs and not findings:
         raise AllCandidatesFailed("ни одна подзадача не получила ответа от моделей")
+    ctx.findings = findings
+    return await _synthesize(ctx, findings)
+
+
+async def _synthesize(ctx: ExecContext, findings: list) -> Result:
+    card = ctx.card
     synth_user = ctx.task_payload() | {"находки_субагентов": findings}
     if ctx.security_flags:
         synth_user["предупреждения_безопасности"] = ctx.security_flags

@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import pytest
+
 import json
 
 import httpx
@@ -64,6 +66,6 @@ async def test_end_to_end_team_with_real_gateway():
     critic_model = [x for x in log if "независимый проверяющий" in x["system"]][0]["model"]
     assert vendor_of(critic_model) != vendor_of(synth_model)
     # каждый вызов оплачен и виден в ходе работы
-    assert treasury.spent_task(tid) == len(log) * 0.002
+    assert treasury.spent_task(tid) + treasury.spent_task(f"{tid}:intake") == pytest.approx(len(log) * 0.002)
     assert "Мелкие замечания" in note.last[0]
     await gw.aclose()

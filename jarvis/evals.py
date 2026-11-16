@@ -68,7 +68,7 @@ async def run_online(app, cases: list[dict], max_ticks: int = 30, max_usd: float
         spent = sum(x["cost_usd"] or 0 for x in app.store.steps(tid))
         expect = c.get("expect_final", ["done", "awaiting_owner"])
         # эскалация «не прошло проверку после доработок» — не успех, даже если статус awaiting_owner
-        escalated = "не прошло проверку" in (t["note"] or "")
+        escalated = any(x in (t["note"] or "") for x in ("не прошло проверку", "исчерпан"))  # и упор в лимит
         ok = (not timed_out and not escalated and t["status"] in expect
               and (c.get("expect_class") in (None, t["cls"])))
         passed += ok

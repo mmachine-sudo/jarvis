@@ -165,10 +165,12 @@ class Orchestrator:
                           rework_notes=Store.loads(t["issues_json"], []),
                           lessons=[x["text"] for x in self.memory.lessons("active")],
                           settings=self.s, gw=self._gw_for(card), log=self._log(tid),
-                          reader=self.reader, searcher=self.searcher)
+                          reader=self.reader, searcher=self.searcher,
+                          prior_findings=Store.loads(t["result_json"], {}).get("findings", []))
         result = await (run_solo(ctx) if card.mode.value == "solo" else run_team(ctx))
         self.store.update_task(tid, status="verifying", result_json={"result": result.model_dump(),
                                                                      "author": ctx.author,
+                                                                     "findings": ctx.findings,
                                                                      "security": ctx.security_flags})
         await self._verify(self.store.task(tid))
 

@@ -186,3 +186,15 @@ async def test_class_b_with_owner_actions_does_not_block(make_orch, store):
         await orch.run_pending()
     assert store.task(tid)["status"] == "done"
     assert "Что делаешь ты" in note.last[0]
+
+
+async def test_rework_resynthesizes_without_new_research(make_orch, store):
+    from .conftest import PLAN, FINDING
+    orch, gw, note = make_orch({"card": [card("B")], "planner": [PLAN], "worker": [FINDING],
+                                "synth": [result()], "critic": [verdict(False, "major", ["Нет вывода"]), verdict(True)]})
+    tid = orch.submit("Сравни два тарифа")
+    for _ in range(12):
+        await orch.run_pending()
+    assert store.task(tid)["status"] == "done"
+    roles = gw.roles()
+    assert roles.count("planner") == 1 and roles.count("synth") == 2  # второй круг — только сводка

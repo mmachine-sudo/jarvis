@@ -35,7 +35,9 @@ async def draft_card(task_id: str, request: str, answers: list[str], *, gw: Gate
                                 owner=owner_block(settings.owner.rules))
     user = {"запрос": redact(request), "ответы_владельца": [redact(a) for a in answers],
             "брифинг": briefing}
-    reply = await gw.chat("card", as_messages(system, user), task_id=task_id, schema=CardDraft,
+    # разбор запроса — накладной расход до того, как известен класс: в лимит задачи не входит
+    # (эталоны 16.11: карточка съедала половину лимита бытовой задачи $0.02)
+    reply = await gw.chat("card", as_messages(system, user), task_id=f"{task_id}:intake", schema=CardDraft,
                           task_cap=settings.task_cap("A"), max_tokens=1200)
     d: CardDraft = reply.data
     questions = d.questions[: settings.limits.clarify_max_questions] if allow_questions else []
