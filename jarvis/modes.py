@@ -102,6 +102,15 @@ class ExecContext:
         return owner_block(self.settings.owner.rules, self.lessons)
 
 
+LOOKUP_WORDS = ("найди", "найти", "где ", "где купить", "сколько стоит", "адрес", "телефон", "контакт", "доставк",
+                "погода", "курс ", "расписани", "часы работы")
+
+
+def needs_lookup(text: str) -> bool:
+    t = " " + text.lower() + " "
+    return any(w in t for w in LOOKUP_WORDS)
+
+
 def stamp_tiers(result: Result, settings: Settings) -> Result:
     """Уровень источника ставит код по домену — модели в этом не доверяем."""
     for c in result.claims:
@@ -112,7 +121,14 @@ def stamp_tiers(result: Result, settings: Settings) -> Result:
 async def run_solo(ctx: ExecContext) -> Result:
     system = SOLO_SYSTEM.replace("{owner}", ctx.owner())
     role = "solo_cheap" if ctx.card.cls.value == "C" and ctx.settings.models.get("solo_cheap") else "solo"
-    reply = await ctx.gw.chat(role, as_messages(system, ctx.task_payload()), task_id=ctx.card.id,
+    payload = ctx.task_payload()
+    if ctx.card.cls.value == "C" and needs_lookup(ctx.card.goal + " " + payload.get("запрос", "")):
+        # «найди / где / сколько стоит» — без поиска модель отвечает советами, где искать (эталоны 16.11)
+        query = payload.get("запрос") or ctx.card.goal
+        evidence = await _research(ctx, SubTask(title="поиск", question=ctx.card.goal, query=query[:200]))
+        if evidence:
+            payload["EVIDENCE"] = [e.model_dump() for e in evidence]
+    reply = await ctx.gw.chat(role, as_messages(system, payload), task_id=ctx.card.id,
                               schema=Result, task_cap=ctx.cap, max_tokens=4000)
     ctx.log("execute", "solo", f"ответ получен ({len(reply.data.answer)} симв.)", reply)
     ctx.author = reply.model

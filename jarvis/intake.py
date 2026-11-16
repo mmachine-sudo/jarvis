@@ -51,7 +51,7 @@ async def draft_card(task_id: str, request: str, answers: list[str], *, gw: Gate
         mode=MODE_BY_CLASS[cls], privacy=Privacy(d.privacy), autonomy=AUTONOMY_BY_CLASS[cls],
         evidence=EvidencePolicy(required=d.needs_evidence and cls != TaskClass.C,
                                 min_tier=1 if cls == TaskClass.A else 2),
-        budget=TaskBudget(usd_cap=settings.task_cap(cls.value), max_rounds=settings.limits.max_rounds,
+        budget=TaskBudget(usd_cap=settings.task_cap(cls.value), max_rounds=1 if cls.value == "A" else settings.limits.max_rounds,
                           depth_cap=settings.limits.depth_cap, fanout_cap=settings.limits.fanout_cap),
         domain=d.domain or "general", forecast_question=d.forecast_question,
     )

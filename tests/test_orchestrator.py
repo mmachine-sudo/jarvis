@@ -206,3 +206,34 @@ async def test_rules_never_lower_class(make_orch, store):
     tid = orch.submit("Перевести деньги маме")
     await orch.advance(tid)
     assert store.task(tid)["cls"] == TaskClass.A.value
+
+
+async def test_class_c_lookup_uses_search(make_orch, store):
+    class FakeSearcher:
+        async def search(self, q, n=3):
+            return ["https://water.example/cha-am"]
+
+    class FakeReader:
+        async def read(self, url, question, task_id=None, task_cap=None):
+            return Evidence(url=url, tier=3, facts=[ExtractedFact(text="Доставка 19 л — 60 бат, тел. 080-000")],
+                            instructions_detected=False)
+
+    c = card("C", evidence=False)
+    c["goal"] = "Найти доставку питьевой воды в Ча-аме"
+    orch, gw, note = make_orch({"card": [c], "solo": [result(url=None)], "critic": [verdict()]},
+                               reader=FakeReader(), searcher=FakeSearcher())
+    tid = orch.submit("Найди доставку питьевой воды в Ча-аме")
+    await drive(orch)
+    assert store.task(tid)["status"] == "done"
+    solo_msg = [x for x in gw.calls if x["role"] == "solo"][0]["messages"][1]["content"]
+    assert "60 бат" in solo_msg and "EVIDENCE" in solo_msg
+
+
+async def test_class_a_gets_one_rework_round(make_orch, store):
+    orch, gw, note = make_orch({"card": [card("A")], "planner": [PLAN], "worker": [FINDING],
+                                "synth": [result(actions=["Подать заявление"])],
+                                "critic": [verdict(False, "major", ["Нет сверки с ведомством"])]})
+    tid = orch.submit("Как продлить визу")
+    await drive(orch, ticks=30)
+    assert store.task(tid)["status"] == "awaiting_owner"
+    assert [x["role"] for x in gw.calls].count("synth") == 2  # исходник + один круг доработки
