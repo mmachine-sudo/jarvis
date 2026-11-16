@@ -84,7 +84,7 @@
 
 ```bash
 # на VPS, от root
-git clone https://github.com/<владелец>/jarvis.git /opt/jarvis
+git clone https://github.com/mmachine-sudo/jarvis.git /opt/jarvis
 cd /opt/jarvis && bash deploy/install.sh
 ```
 
