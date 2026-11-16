@@ -2,6 +2,7 @@
 # Применение текущего коммита /opt/jarvis на сервере (root). Вызывает deploy.sh; ненулевой выход → откат.
 # Последняя строка вывода — статус для журнала.
 export LC_ALL=C.UTF-8
+umask 022
 set -euo pipefail
 APP=/opt/jarvis VENV=/opt/jarvis-venv DATA=/var/lib/jarvis
 id jarvis >/dev/null 2>&1 || useradd --system --home $DATA --shell /usr/sbin/nologin jarvis
@@ -14,6 +15,9 @@ dpkg -s python3-venv >/dev/null 2>&1 || apt-get install -y -q python3-venv >/dev
 [ -x $VENV/bin/python ] || python3 -m venv $VENV
 REQ=$(sha256sum $APP/pyproject.toml | cut -c1-16)
 [ "$(cat $VENV/.req 2>/dev/null)" = "$REQ" ] || { $VENV/bin/pip install -q -e "$APP[dev]" && echo "$REQ" > $VENV/.req; }
+
+# код и окружение читаемы для пользователя jarvis (клон мог быть сделан с umask 077)
+chmod -R a+rX $APP $VENV
 
 # тесты: не прошли — не перезапускаем
 (cd $APP && $VENV/bin/python -m pytest -q -p no:cacheprovider) >/tmp/jarvis-tests.log 2>&1 \
