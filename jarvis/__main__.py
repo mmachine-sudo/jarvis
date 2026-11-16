@@ -19,12 +19,18 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--online", action="store_true", help="прогнать через настоящие модели (тратит бюджет)")
     ev.add_argument("--cases", default="evals/cases.yaml")
     sub.add_parser("status", help="бюджет и задачи")
+    inh = sub.add_parser("inherit-report", help="агрегаты из снимка базы MMachine (модели, доработки)")
+    inh.add_argument("path", nargs="?", default="/var/lib/jarvis/inherit/mmachine.db")
     args = p.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     from .guard import install_log_redaction
     install_log_redaction()
     logging.getLogger("httpx").setLevel(logging.WARNING)  # httpx пишет URL запроса, а в URL Telegram — токен
+    if args.cmd == "inherit-report":
+        from .inherit import analyze, report_lines
+        print("\n".join(report_lines(analyze(args.path))))
+        return 0
     settings = load_settings(args.config)
 
     if args.cmd == "doctor":

@@ -72,3 +72,24 @@ def test_journal_calibration_adjusts_overconfidence(store):
         j.resolve(eid, happened=i < 6)  # говорили 90%, сбылось 50%
     a = j.adjust(0.9)
     assert a["active"] and 0.5 < a["p"] < 0.9
+
+
+def test_inherit_report_aggregates_only(tmp_path):
+    import sqlite3
+    from jarvis.inherit import analyze, report_lines
+    db = tmp_path / "mm.db"
+    con = sqlite3.connect(db)
+    con.executescript("""CREATE TABLE calls(id INTEGER PRIMARY KEY, ts TEXT, task_id INTEGER, role TEXT, provider TEXT,
+      model TEXT, vendor TEXT, tokens_in INTEGER, tokens_out INTEGER, cost_usd REAL, ok INTEGER, error TEXT, ms INTEGER);
+      CREATE TABLE rework(id INTEGER PRIMARY KEY, ts TEXT, task_id INTEGER, kind TEXT, key TEXT, round INTEGER,
+      cost REAL, reason TEXT, model TEXT);
+      CREATE TABLE tasks(id INTEGER PRIMARY KEY, kind TEXT, status TEXT, payload TEXT);""")
+    for i in range(30):
+        con.execute("INSERT INTO calls(ts,model,cost_usd,ok,error,ms) VALUES(?,?,?,?,?,?)",
+                    ("2026-11-09T10:00:00", "openai/x", 0.01, int(i % 10 != 0), "HTTP 429 rate limit", 2000))
+    con.execute("INSERT INTO rework(ts,kind,key,round,cost,reason) VALUES('t','scout','k',1,0.2,'секрет покупателя')")
+    con.execute("INSERT INTO tasks(kind,status,payload) VALUES('scout','done','покупатель Иванов')")
+    con.commit(); con.close()
+    text = "\n".join(report_lines(analyze(str(db))))
+    assert "openai/x: 30 вызовов, успешно 90%" in text and "429/лимит 3" in text
+    assert "scout 1 кр." in text and "Иванов" not in text and "покупателя" not in text

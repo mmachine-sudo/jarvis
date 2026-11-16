@@ -56,6 +56,12 @@ DOC=$(echo "$DOCALL" | grep -E '✗|!|Error|error' | head -6 | tr '\n' ' ' | cut
 systemctl restart jarvis; sleep 12
 systemctl is-active --quiet jarvis || { echo "doctor: $(echo "$DOCALL" | tail -n 8 | tr '\n' ' ' | cut -c1-400)"; journalctl -u jarvis -n 40 --no-pager -o cat | grep -v '^ *$' | tail -n 8; echo "jarvis: НЕ ЗАПУСТИЛСЯ · doctor: ${DOC:-ок}"; exit 1; }
 git -C $APP rev-parse --short HEAD > $DATA/.deployed-commit
+# разово: агрегаты из базы MMachine (надёжность моделей, доработки) — в журнал Notion
+if [ -f $DATA/inherit/mmachine.db ] && [ ! -f $DATA/.inherit-reported ]; then
+  $VENV/bin/python -m jarvis inherit-report $DATA/inherit/mmachine.db 2>&1 | head -n 25 | while IFS= read -r l; do
+    $APP/deploy/notify.sh "$l"; done
+  touch $DATA/.inherit-reported
+fi
 # бэкап: первый — сразу, дальше по таймеру; ошибка бэкапа выкладку не валит
 if [ -f $DATA/.last-backup ]; then BK="бэкап: последний $(cat $DATA/.last-backup)"; else BK=$($APP/deploy/backup.sh 2>&1 | tail -1); fi
 echo "jarvis: работает · поиск SearXNG ${SXN:-0} · doctor: ${DOC:-всё ок} · $BK"
