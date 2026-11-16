@@ -66,6 +66,12 @@ if [ -f $APP/ops/evals-online.id ] && ! cmp -s $APP/ops/evals-online.id $DATA/.e
   for u in $(systemctl list-units 'jarvis-evals-*' --no-legend --plain | awk '{print $1}'); do systemctl stop "$u"; done
   systemd-run --unit=jarvis-evals-$(date +%s) --collect --property=RuntimeMaxSec=90m $APP/deploy/evals-online.sh >/dev/null 2>&1 || true
 fi
+# разбор прогона эталонов по запросу (бесплатно): ops/eval-report.id
+if [ -f $APP/ops/eval-report.id ] && [ -f $DATA/evals.db ] && ! cmp -s $APP/ops/eval-report.id $DATA/.eval-report.id; then
+  cp $APP/ops/eval-report.id $DATA/.eval-report.id
+  $VENV/bin/python -m jarvis eval-report $DATA/evals.db 2>&1 | head -n 60 | while IFS= read -r l; do
+    $APP/deploy/notify.sh "разбор: $l"; done
+fi
 # бэкап: первый — сразу, дальше по таймеру; ошибка бэкапа выкладку не валит
 if [ -f $DATA/.last-backup ]; then BK="бэкап: последний $(cat $DATA/.last-backup)"; else BK=$($APP/deploy/backup.sh 2>&1 | tail -1); fi
 echo "jarvis: работает · поиск SearXNG ${SXN:-0} · doctor: ${DOC:-всё ок} · $BK"

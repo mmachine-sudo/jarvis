@@ -25,6 +25,8 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--cases", default="evals/cases.yaml")
     ev.add_argument("--max-usd", type=float, default=3.0, help="потолок трат прогона")
     sub.add_parser("status", help="бюджет и задачи")
+    er = sub.add_parser("eval-report", help="разбор последнего прогона эталонов (бесплатно)")
+    er.add_argument("path", nargs="?", default="/var/lib/jarvis/evals.db")
     inh = sub.add_parser("inherit-report", help="агрегаты из снимка базы MMachine (модели, доработки)")
     inh.add_argument("path", nargs="?", default="/var/lib/jarvis/inherit/mmachine.db")
     args = p.parse_args(argv)
@@ -33,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     from .guard import install_log_redaction
     install_log_redaction()
     logging.getLogger("httpx").setLevel(logging.WARNING)  # httpx пишет URL запроса, а в URL Telegram — токен
+    if args.cmd == "eval-report":
+        from .evalreport import report
+        print("\n".join(report(args.path)))
+        return 0
     if args.cmd == "inherit-report":
         from .inherit import analyze, report_lines
         print("\n".join(report_lines(analyze(args.path))))
