@@ -67,47 +67,21 @@
 | `/journal` | Прогнозы и Brier |
 | `/playbook`, `/promote N`, `/reject N` | Кандидаты в плейбук |
 
-## Запуск на VPS
+## Сервер
 
-### 1. Секреты (делаешь ты, около 10 минут)
+Jarvis работает на бывшем сервере MMachine (Contabo, `mmachine-1`) и полностью её заменил (16.11.2026).
 
-Ключи в чат и в репозиторий не попадают: Jarvis берёт их из Infisical при старте.
-
-1. В Infisical создай проект `jarvis`, окружение `prod`, и добавь три секрета:
-   - `OPENROUTER_API_KEY` — отдельный ключ OpenRouter для Jarvis с лимитом $300 в месяц. В OpenRouter: Keys → Create key → задать лимит;
-   - `TELEGRAM_BOT_TOKEN` — у @BotFather: `/newbot` → имя → токен;
-   - `TELEGRAM_OWNER_ID` — твой числовой id; его покажет @userinfobot.
-2. Создай Machine Identity `jarvis-vps` с методом Universal Auth и добавь её в проект `jarvis` с правом чтения окружения `prod`. Сохрани Client ID и Client Secret. Это делается в настройках организации и проекта Infisical; если пункты меню называются иначе, ищи «Machine Identities».
-3. На VPS создай файл `/etc/jarvis/infisical.env` с четырьмя строками: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`, `INFISICAL_ENV=prod`.
-
-### 2. Установка
-
-```bash
-# на VPS, от root
-git clone https://github.com/mmachine-sudo/jarvis.git /opt/jarvis
-cd /opt/jarvis && bash deploy/install.sh
-```
-
-`install.sh` создаёт пользователя `jarvis`, окружение Python, конфиг из примера. Затем запускает
-`jarvis doctor` и, если всё в порядке, включает systemd-сервис. Если `doctor` покажет ✗ у id
-модели, он подскажет похожие id: поправь `config/jarvis.yaml` и запусти установку ещё раз.
-
-На VPS MMachine Infisical уже используется. Если CLI `infisical` там всё же нет, поставь его по
-официальной инструкции Infisical CLI (раздел Install для Ubuntu) и запусти `install.sh` снова.
-
-### 3. Проверка
-
-```bash
-jarvis evals                 # офлайн, бесплатно: роутер на эталонных задачах
-jarvis evals --online        # настоящие модели, примерно $0.5–2 за прогон
-journalctl -u jarvis -f      # логи
-```
-
-**Ворота фазы 1:**
-- 20 твоих реальных задач прошли через карточку;
-- онлайн-набор проходит не меньше чем на 80%;
-- нет ни одного действия без твоего подтверждения;
-- стоимость видна по каждой задаче (`/task`).
+- **Выкладка (GitOps)**: таймер `jarvis-deploy` каждые 2 мин забирает `main` → `deploy/apply.sh`: тесты, окружение
+  `/opt/jarvis-venv`, SearXNG (127.0.0.1:8888), службы, `doctor`, перезапуск. Сбой → откат на прошлый коммит.
+  Итог каждой выкладки — строкой в Notion на странице «Jarvis — сервер».
+- **Секреты**: Infisical, проект `mmachine` (prod), через уже настроенный на сервере `mm-secrets`. Никаких файлов
+  с ключами руками создавать не нужно. `deploy/secrets.sh` переводит имена: `OPENROUTER_API_KEY`,
+  `MM_TELEGRAM_BOT_TOKEN` → `TELEGRAM_BOT_TOKEN`; id владельца перенесён из базы MMachine в `/etc/jarvis/owner_id`.
+  Чтобы дать Jarvis свои ключи, добавь в тот же проект `JARVIS_OPENROUTER_API_KEY` / `JARVIS_TELEGRAM_BOT_TOKEN` —
+  они важнее общих; `jarvis-secrets-watch` перезапустит Jarvis сам.
+- **Конфиг**: `/etc/jarvis/jarvis.yaml` (создаётся из `config/jarvis.example.yaml` один раз, дальше не перезаписывается).
+- **Данные**: `/var/lib/jarvis` (база), `/var/lib/jarvis/inherit/mmachine.db` — снимок базы MMachine для эталонов и уроков.
+- **Ручной запуск команд**: `/opt/jarvis/deploy/run.sh doctor | status | evals`.
 
 ## Разработка
 

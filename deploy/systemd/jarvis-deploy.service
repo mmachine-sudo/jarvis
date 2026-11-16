@@ -1,0 +1,6 @@
+[Unit]
+Description=Jarvis deploy
+
+[Service]
+Type=oneshot
+ExecStart=/opt/jarvis/deploy/deploy.sh

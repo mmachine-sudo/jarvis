@@ -95,4 +95,9 @@ def load_settings(path: str | Path | None = None, env: dict[str, str] | None = N
     settings.telegram_owner_id = int(owner) if owner and owner.strip().lstrip("-").isdigit() else None
     if env.get("JARVIS_DB"):
         settings.db_path = env["JARVIS_DB"]
+    # адреса инфраструктуры сервера (SearXNG, локальная модель через Tailscale) — из окружения
+    if env.get("JARVIS_SEARXNG_URL"):
+        settings.searxng_url = env["JARVIS_SEARXNG_URL"]
+    if env.get("JARVIS_LOCAL_LLM_URL"):
+        settings.local_llm_url = env["JARVIS_LOCAL_LLM_URL"]
     return settings

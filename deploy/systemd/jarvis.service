@@ -1,0 +1,15 @@
+[Unit]
+Description=Jarvis — личная мультиагентная система
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# run.sh загружает секреты (root) и запускает процесс от пользователя jarvis
+ExecStart=/opt/jarvis/deploy/run.sh run
+WorkingDirectory=/opt/jarvis
+Restart=always
+RestartSec=15
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

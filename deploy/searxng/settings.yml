@@ -1,0 +1,26 @@
+# SearXNG на сервере MMachine: бесплатный метапоиск для отделов. Доступен только с самого сервера (127.0.0.1:8888).
+# Диагностика 2.11 (run searx_diag, 4 контрольных запроса на каждый движок):
+#   yandex — по теме на всех 4 (starterstory, CPA-сети, gluecksspiel-behoerde.de, монетизация Telegram);
+#   bing, yahoo — мусор (игнорируют часть запроса: «CPA» → SAP/бухгалтеры, «GlüStV» → canva/npm, site: не работает);
+#   google, google cse, brave, duckduckgo, qwant — с адреса VPS заблокированы (капча, access denied, too many requests);
+#   mwmbl — маленький индекс; mojeek, startpage, presearch, marginalia — нет в этой версии.
+# Оставлен только yandex. Если он даст < 3 результатов — код сам идёт в платный поиск (Exa) и сильную модель.
+use_default_settings:
+  engines:
+    keep_only:
+      - yandex
+general:
+  instance_name: "mm-search"
+server:
+  secret_key: "__SECRET__"
+  limiter: false
+  image_proxy: false
+  public_instance: false
+search:
+  safe_search: 0
+  formats: [html, json]
+outgoing:
+  request_timeout: 8.0
+engines:
+  - name: yandex
+    disabled: false

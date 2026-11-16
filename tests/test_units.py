@@ -204,3 +204,11 @@ def test_offline_evals_all_pass():
     s = load_settings(ROOT / "config/jarvis.example.yaml", env={})
     passed, total, report = run_offline(s, load_cases(ROOT / "evals/cases.yaml"))
     assert passed == total, "\n".join(report)
+
+
+def test_infra_urls_from_env(tmp_path):
+    from jarvis.config import load_settings
+    s = load_settings(tmp_path / "none.yaml", env={"JARVIS_SEARXNG_URL": "http://127.0.0.1:8888",
+                                                   "JARVIS_LOCAL_LLM_URL": "http://100.1.2.3:1234/v1"})
+    assert s.searxng_url == "http://127.0.0.1:8888"
+    assert s.local_llm_url == "http://100.1.2.3:1234/v1"

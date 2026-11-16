@@ -1,0 +1,9 @@
+[Unit]
+Description=Jarvis deploy каждые 2min
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target
