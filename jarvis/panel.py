@@ -31,6 +31,8 @@ def snapshot(app) -> dict:
     for t in s.tasks(limit=40):
         card = Store.loads(t["card_json"], {}) or {}
         res = Store.loads(t["result_json"], {}) or {}
+        if isinstance(res.get("result"), dict):  # итог агента и конвейера лежит в result
+            res = {**res, **res["result"]}
         steps = s.steps(t["id"])
         tasks.append({
             "id": t["id"], "status": t["status"], "cls": t["cls"], "round": t["round"],
