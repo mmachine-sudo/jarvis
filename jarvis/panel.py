@@ -75,6 +75,10 @@ def snapshot(app) -> dict:
                     "open": [{"id": e["id"], "q": e["question"], "p": e["p"], "by": e["resolve_by"]}
                              for e in app.journal.entries(resolved=False)[:15]]},
         "rework": rework,
+        "cases": [{"task": c["task_id"], "title": c["title"], "status": c["status"], "usd": round(c["cost_usd"] or 0, 2),
+                   "confidence": c["confidence"], "strategy": (c["strategy"] or "")[:600],
+                   "outcome": c["outcome"], "lessons": [x["text"] for x in c["lessons"]][-8:]}
+                  for c in app.orch.cases.recent(15)],
         "models": app.settings.models,
         "health": {"deployed": _read("/var/lib/jarvis/.deployed-commit"),
                    "backup": _read("/var/lib/jarvis/.last-backup"),
@@ -185,6 +189,9 @@ async def run_command(app, cmd: dict) -> tuple[bool, str]:
     if kind in ("promote", "reject"):
         ok = app.memory.set_lesson_status(int(arg), "active" if kind == "promote" else "rejected")
         return ok, "готово" if ok else "нет такого кандидата"
+    if kind == "outcome":  # «T-0001 | что получилось»
+        tid, _, text = arg.partition("|")
+        return True, await app.orch.outcome(tid.strip().upper(), text.strip())
     if kind == "journal":  # «7 1» — прогноз 7 сбылся (1) / нет (0)
         jid, _, val = arg.partition(" ")
         app.journal.resolve(int(jid), val.strip() == "1")

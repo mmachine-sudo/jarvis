@@ -15,6 +15,7 @@ async def test_message_to_answer(tmp_path):
     s = Settings()
     s.openrouter_api_key, s.telegram_bot_token, s.telegram_owner_id = "k", "1:t", 42
     s.db_path = str(tmp_path / "j.db")
+    s.agent.enabled = False  # здесь проверяем конвейер v4; агентное ядро — в test_agent.py
     app = build(s)
     sent: list[dict] = []
 

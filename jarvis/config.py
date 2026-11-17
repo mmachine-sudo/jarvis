@@ -22,6 +22,20 @@ class BudgetCfg(BaseModel):
     est_call_usd: float = 0.02
 
 
+class AgentCfg(BaseModel):
+    """Агентное ядро v5 (Claude Agent SDK через OpenRouter) для задач классов A и B."""
+    enabled: bool = True
+    model: str = "anthropic/claude-opus-5.5"
+    sub_model: str = "anthropic/claude-sonnet-5.5"
+    fast_model: str = "anthropic/claude-haiku-5.5"
+    max_usd_per_task: float = 10.0
+    max_turns: int = 250
+    classes: list[str] = Field(default_factory=lambda: ["A", "B"])
+    workdir: str = "/var/lib/jarvis/work"
+    progress_every_s: int = 180
+    max_nudges: int = 2
+
+
 class LimitsCfg(BaseModel):
     max_rounds: int = 2
     depth_cap: int = 3
@@ -63,6 +77,7 @@ class Settings(BaseModel):
     owner: OwnerCfg = Field(default_factory=OwnerCfg)
     budget: BudgetCfg = Field(default_factory=BudgetCfg)
     limits: LimitsCfg = Field(default_factory=LimitsCfg)
+    agent: AgentCfg = Field(default_factory=AgentCfg)
     router: RouterCfg = Field(default_factory=RouterCfg)
     sources: SourcesCfg = Field(default_factory=SourcesCfg)
     models: dict[str, list[str]] = Field(default_factory=lambda: dict(DEFAULT_MODELS))

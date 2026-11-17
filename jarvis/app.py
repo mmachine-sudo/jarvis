@@ -49,6 +49,9 @@ def build(settings: Settings) -> App:
     reader = QuarantineReader(settings, gateway)
     searcher = Searcher(settings.searxng_url) if settings.searxng_url else None
     orch = Orchestrator(settings, store, gateway, memory, journal, guard, bot, reader, searcher)
+    if settings.agent.enabled:
+        from .agent.runner import AgentRunner
+        orch.agent = AgentRunner(settings, store, orch.cases, gateway, bot, treasury)
     bot.orch, bot.memory, bot.journal, bot.treasury, bot.guard, bot.gateway = orch, memory, journal, treasury, guard, gateway
     return App(settings, store, treasury, gateway, memory, journal, guard, bot, orch)
 
@@ -94,8 +97,8 @@ async def tick_schedule(app: App, now: datetime) -> None:
 
 async def run(settings: Settings) -> None:
     app = build(settings)
-    log.info("Jarvis запущен")
-    await app.bot.notify("Jarvis запущен. /help — команды.")
+    n = app.orch.recover_agents()
+    log.info("Jarvis запущен, продолжаю прерванных агентов: %s", n)
     jobs = [app.bot.poll_forever(), worker(app), scheduler(app)]
     if settings.notion_token and settings.panel_state_page and settings.panel_commands_db:
         from .panel import NotionPanel, panel_loop

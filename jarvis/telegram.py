@@ -32,7 +32,9 @@ HELP = """Jarvis — команды:
 /fact ключ = значение — записать факт о себе (уровень 1)
 /facts [поиск] — факты в памяти
 /journal — прогнозы и Brier
-/playbook — кандидаты в плейбук; /promote N, /reject N"""
+/playbook — кандидаты в плейбук; /promote N, /reject N
+/outcome T-0001 текст — что получилось по задаче на деле (Jarvis разберёт и запомнит уроки)
+/cases — последние дела агента и их уроки"""
 
 
 def split(text: str) -> list[str]:
@@ -72,6 +74,15 @@ class TelegramBot:
                 await self.client.post(f"{self.api}/sendMessage", json=payload)
             except httpx.HTTPError as e:
                 log.warning("sendMessage: %s", type(e).__name__)
+
+    async def send_file(self, path: str, caption: str = "") -> None:
+        try:
+            with open(path, "rb") as f:
+                await self.client.post(f"{self.api}/sendDocument", data={"chat_id": str(self.owner_id),
+                                                                           "caption": caption[:1000]},
+                                       files={"document": (path.rsplit("/", 1)[-1], f.read())})
+        except (OSError, httpx.HTTPError) as e:
+            log.warning("sendDocument: %s", type(e).__name__)
 
     # --- приём ---------------------------------------------------------------------
     async def poll_forever(self) -> None:
@@ -158,6 +169,20 @@ class TelegramBot:
             tid, _, ans = arg.partition(" ")
             ok = o.answer_clarification(tid.upper(), ans.strip())
             await self.notify("Принял ответ, продолжаю." if ok else "Эта задача не ждёт уточнения.")
+        elif cmd == "/outcome":
+            tid, _, txt = arg.partition(" ")
+            if not txt.strip():
+                await self.notify("Формат: /outcome T-0001 что получилось (цифры, что сработало, что нет)")
+            else:
+                await self.notify(await o.outcome(tid.upper(), txt.strip()))
+        elif cmd == "/cases":
+            rows = o.cases.recent(8)
+            if not rows:
+                await self.notify("Дел пока нет.")
+            else:
+                await self.notify("\n\n".join(
+                    f"{c['task_id']} · {c['status']} · ${c['cost_usd'] or 0:.2f}\n{(c['title'] or '')[:120]}"
+                    + "".join(f"\n  урок: {x['text'][:160]}" for x in c["lessons"][-3:]) for c in rows))
         elif cmd == "/fact":
             key, sep, value = arg.partition("=")
             if not sep or not key.strip():
@@ -186,7 +211,8 @@ class TelegramBot:
         elif cmd.startswith("/"):
             await self.notify("Не знаю такой команды. /help")
         else:
-            waiting = self.store.tasks(statuses=["awaiting_clarification"])
+            waiting = [t for t in self.store.tasks(statuses=["awaiting_clarification", "agent_waiting"])
+                       if t["status"] == "awaiting_clarification" or '"type": "question"' in (t["result_json"] or "")]
             if len(waiting) == 1:
                 o.answer_clarification(waiting[0]["id"], text)
                 await self.notify(f"Принял как ответ к {waiting[0]['id']}. Новую задачу — через /new.")

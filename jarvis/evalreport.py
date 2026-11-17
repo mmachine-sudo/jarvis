@@ -27,7 +27,6 @@ def report(path: str) -> list[str]:
         if t["issues_json"] and t["status"] != "done":
             out.append("   замечания: " + str(t["issues_json"])[:600])
         if t["cls"] == "A":  # таймлайн: где уходит время
-            prev = None
             line = []
             for s in steps:
                 ts = s["created_at"][11:19]

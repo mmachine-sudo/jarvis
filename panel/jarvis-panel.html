@@ -96,15 +96,18 @@
   var S = null, mcp = null, err = null, busy = false, view = "main", openTask = null, readAt = null;
 
   var CHOICES = {
+    agent_action: [["Подтвердить", "approve", "ok"], ["Отклонить", "decline", "danger"]],
     decision: [["Принять", "accept", "ok"], ["Доработать", "rework", ""], ["Отклонить", "reject", "danger"]],
     escalation: [["Принять как есть", "accept", "ok"], ["Ещё круг", "rework", ""], ["Отменить", "cancel", "danger"]],
     budget: [["Удвоить лимит задачи", "extend", "ok"], ["Остановить задачу", "cancel", "danger"]],
     privacy: [["В облаке, обезличенно", "cloud", ""], ["Отменить", "cancel", "danger"]],
     fact_conflict: [["Взять новый", "new", "ok"], ["Оставить прежний", "old", ""]]
   };
-  var KIND = { decision: "Решение", escalation: "Не прошло проверку", budget: "Лимит", privacy: "Приватные данные", fact_conflict: "Конфликт фактов" };
+  var KIND = { agent_action: "Действие агента", decision: "Решение", escalation: "Не прошло проверку", budget: "Лимит", privacy: "Приватные данные", fact_conflict: "Конфликт фактов" };
   var STATUS = { new: "новая", awaiting_clarification: "ждёт ответа", ready: "в очереди", executing: "работает", verifying: "проверка",
-                 rework: "доработка", awaiting_owner: "ждёт тебя", done: "готово", cancelled: "отменена" };
+                 rework: "доработка", awaiting_owner: "ждёт тебя", done: "готово", cancelled: "отменена",
+                 agent_queued: "агент: в очереди", agent_running: "агент работает", agent_waiting: "агент ждёт тебя",
+                 agent_resume: "агент продолжает" };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
@@ -217,7 +220,7 @@
     c1.appendChild(bt); g.appendChild(c1);
 
     var c2 = el("div", "card"); c2.appendChild(el("h3", null, "Ждут твоего решения"));
-    var ap = arr(S.approvals), qs = arr(S.tasks).filter(function (t) { return t.status === "awaiting_clarification"; });
+    var ap = arr(S.approvals), qs = arr(S.tasks).filter(function (t) { return t.status === "awaiting_clarification" || (t.status === "agent_waiting" && arr(t.questions).length); });
     if (!ap.length && !qs.length) c2.appendChild(el("div", "empty", "Ничего не ждёт — всё под контролем."));
     ap.forEach(function (a) { c2.appendChild(approvalRow(a)); });
     qs.forEach(function (t) { c2.appendChild(questionRow(t)); });
@@ -314,7 +317,15 @@
     if (t.note) c.appendChild(el("div", "small", t.note));
     var ap = arr(S.approvals).filter(function (a) { return a.task_id === t.id; });
     ap.forEach(function (a) { c.appendChild(approvalRow(a)); });
-    if (t.status === "awaiting_clarification") c.appendChild(questionRow(t));
+    if (t.status === "awaiting_clarification" || (t.status === "agent_waiting" && arr(t.questions).length)) c.appendChild(questionRow(t));
+    if (t.status === "done") {
+      var oc = el("div", "row"), om = el("div", "main");
+      om.appendChild(el("b", null, "Что получилось на деле?"));
+      om.appendChild(el("div", "small muted", "Цифры, что сработало, что нет — Jarvis разберёт и запомнит уроки для похожих задач."));
+      var oi = el("textarea"); oi.rows = 2; om.appendChild(oi);
+      var ob = el("div", "btns"); ob.appendChild(button("Записать исход", "ok", function () { var v = oi.value.trim(); if (v) command("outcome", t.id + " | " + v, "Исход по " + t.id); }));
+      om.appendChild(ob); oc.appendChild(om); c.appendChild(oc);
+    }
     root.appendChild(c);
     var g = el("div", "grid g2"); g.style.marginTop = "14px";
     var a1 = el("div", "card"); a1.appendChild(el("h3", null, "Ответ"));
@@ -360,6 +371,15 @@
     g.appendChild(c2);
     root.appendChild(g);
 
+    var cc = el("div", "card"); cc.style.marginTop = "14px"; cc.appendChild(el("h3", null, "Дела агента — опыт и уроки"));
+    var cases = arr(S.cases); if (!cases.length) cc.appendChild(el("div", "empty", "Дел пока нет: они появляются после сложных задач."));
+    cases.forEach(function (k) { var row = el("div", "row"), m = el("div", "main");
+      m.appendChild(el("b", null, k.task + " · " + (k.title || "")));
+      m.appendChild(el("div", "small muted", (k.status || "") + " · " + usd(k.usd) + (k.confidence != null ? " · уверенность " + k.confidence : "") + (k.outcome ? " · исход: " + String(k.outcome).slice(0, 120) : "")));
+      if (k.strategy) m.appendChild(el("div", "small", "Стратегия: " + k.strategy.slice(0, 300)));
+      arr(k.lessons).forEach(function (l) { m.appendChild(el("div", "small", "• " + l)); });
+      row.appendChild(m); cc.appendChild(row); });
+    root.appendChild(cc);
     var j = S.journal || {}, c3 = el("div", "card"); c3.style.marginTop = "14px";
     c3.appendChild(el("h3", null, "Журнал прогнозов"));
     c3.appendChild(el("div", "small muted", j.brier == null ? "Проверенных прогнозов ещё нет — калибровка появится после первых исходов." :

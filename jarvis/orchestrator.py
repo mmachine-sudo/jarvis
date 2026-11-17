@@ -7,8 +7,14 @@ new → (awaiting_clarification) → ready → executing → verifying → done
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from typing import Protocol
+
+from .agent.cases import Cases
+from .agent.prompts import RESUME_ACTION, RESUME_ANSWER, RESUME_RESTART
+from .agent.runner import AgentRunner, RunState
 
 from .card import Privacy, Result, TaskCard, TaskClass
 from .config import Settings
@@ -27,7 +33,9 @@ from .store import Store
 from .treasury import BudgetExceeded
 from .verify import accepted, checklist, consilium_review, critic_review, official_source_gap
 
-ACTIVE = ["new", "ready", "executing", "verifying", "rework"]
+log = logging.getLogger("jarvis.orch")
+
+ACTIVE = ["new", "ready", "executing", "verifying", "rework", "agent_queued", "agent_resume"]
 TERMINAL = {"done", "cancelled", "failed"}
 
 
@@ -48,6 +56,9 @@ class Orchestrator:
         self.reader, self.searcher = reader, searcher
         self.rework = Rework(store)
         self.reminders = Reminders(store, settings.owner.timezone)
+        self.cases = Cases(store)
+        self.agent: AgentRunner | None = None  # ставит app.build: нужен казначей, поиск и бот
+        self._bg: dict[str, asyncio.Task] = {}
 
     # --- вход ----------------------------------------------------------------------
     def submit(self, request: str) -> str:
@@ -99,6 +110,12 @@ class Orchestrator:
     async def advance(self, tid: str) -> None:
         t = self.store.task(tid)
         status = t["status"]
+        if status == "ready" and self._goes_to_agent(t):
+            self._queue_agent(t)
+            return
+        if status in ("agent_queued", "agent_resume"):
+            self._start_agent(t)
+            return
         if status == "new":
             await self._intake(t)
         elif status in ("ready", "executing", "rework"):
@@ -266,8 +283,159 @@ class Orchestrator:
         return "\n\n".join(parts)
 
     # --- ответы владельца -----------------------------------------------------------------------------
+
+    # --- агентное ядро v5 ------------------------------------------------------------------------
+    def _goes_to_agent(self, t: dict) -> bool:
+        card = self.card_of(t)
+        return bool(self.agent and self.s.agent.enabled and card and card.cls.value in self.s.agent.classes
+                    and card.privacy != Privacy.LOCAL_ONLY)
+
+    def _payload(self, t: dict) -> dict:
+        return Store.loads(t["result_json"], {}) or {}
+
+    def _set_payload(self, tid: str, payload: dict, **fields) -> None:
+        self.store.update_task(tid, result_json=json.dumps(payload, ensure_ascii=False), **fields)
+
+    def _queue_agent(self, t: dict) -> None:
+        card = self.card_of(t)
+        answers = Store.loads(t["answers_json"], []) or []
+        prompt = (f"Задача {t['id']} от владельца:\n{t['request']}\n\n"
+                  f"Разбор при приёме: цель — {card.goal}; образ результата — {card.result_image}; "
+                  f"критерии — {'; '.join(card.acceptance)}; класс {card.cls.value} "
+                  f"({'деньги/право/необратимое' if card.cls.value == 'A' else 'важное, обратимое'}).")
+        if answers:
+            prompt += "\nОтветы владельца на уточнения при приёме: " + " | ".join(answers)
+        self.cases.open(t["id"], card.goal, t["request"])
+        payload = self._payload(t)
+        payload["next_prompt"] = prompt
+        self._set_payload(t["id"], payload, status="agent_queued")
+        self.store.add_step(t["id"], "route", "jarvis", "задача отдана агентному ядру (v5)")
+
+    def _start_agent(self, t: dict) -> None:
+        tid = t["id"]
+        if tid in self._bg and not self._bg[tid].done():
+            return
+        payload = self._payload(t)
+        prompt = payload.pop("next_prompt", None) or RESUME_RESTART
+        self._set_payload(tid, payload, status="agent_running")
+        self._bg[tid] = asyncio.create_task(self._agent_cycle(tid, prompt))
+
+    def recover_agents(self) -> int:
+        """После перезапуска: прерванные прогоны продолжаются той же сессией."""
+        n = 0
+        for t in self.store.tasks(statuses=["agent_running"], limit=50):
+            payload = self._payload(t)
+            payload["next_prompt"] = RESUME_RESTART
+            self._set_payload(t["id"], payload, status="agent_resume")
+            n += 1
+        return n
+
+    async def _agent_cycle(self, tid: str, prompt: str) -> None:
+        try:
+            st = await self.agent.run(tid, prompt)
+        except BudgetExceeded as e:  # дневной/месячный лимит владельца
+            self.store.update_task(tid, status="agent_resume")
+            payload = self._payload(self.store.task(tid))
+            payload["next_prompt"] = RESUME_RESTART
+            self._set_payload(tid, payload)
+            await self._budget_exceeded(tid, e)
+            return
+        except Exception as e:  # noqa: BLE001
+            log.exception("агентный прогон %s", tid)
+            st = RunState()
+            payload = self._payload(self.store.task(tid))
+            payload["agent_error"] = f"{type(e).__name__}: {e}"[:300]
+            self._set_payload(tid, payload)
+        await self._after_agent(tid, st)
+
+    async def _after_agent(self, tid: str, st: RunState) -> None:
+        t = self.store.task(tid)
+        payload = self._payload(t)
+        spent = self.agent.spent(tid)
+        if st.question:
+            payload["pending"] = {"type": "question", **st.question}
+            self._set_payload(tid, payload, status="agent_waiting", questions_json=st.question["questions"])
+            qs = "\n".join(f"{i}. {q}" for i, q in enumerate(st.question["questions"], 1))
+            await self.notifier.notify(f"❓ {tid} — вопросы перед работой ({st.question.get('why', '')}):\n{qs}\n\n"
+                                       f"Ответь одним сообщением (или /answer {tid} текст).")
+            return
+        if st.action:
+            payload["pending"] = {"type": "action", **st.action}
+            aid = self.store.add_approval(tid, "agent_action", st.action)
+            self._set_payload(tid, payload, status="agent_waiting")
+            await self.notifier.notify(
+                f"🛠 {tid} — нужно подтверждение: {st.action['title']}\n{st.action['details'][:1500]}\n"
+                f"Стоимость: ${st.action['cost_usd']:.2f}", buttons_for(aid, [("Подтвердить", "approve"),
+                                                                              ("Отклонить", "decline")]))
+            return
+        if st.finished:
+            await self._agent_done(tid, st.finished, spent)
+            return
+        if payload.get("agent_error") == "budget" or spent >= self.s.agent.max_usd_per_task * float(t.get("cap_multiplier") or 1) - 0.05:
+            aid = self.store.add_approval(tid, "budget", {"resume_status": "agent_resume"})
+            payload["next_prompt"] = ("Лимит задачи увеличен владельцем. Продолжай с места остановки; если результат "
+                                      "уже достаточен — сохрани RESULT.md и вызови finish.")
+            self._set_payload(tid, payload, status="awaiting_owner")
+            await self.notifier.notify(f"💸 {tid}: потрачен лимит ${spent:.2f}. Промежуточные файлы сохранены.",
+                                       buttons_for(aid, [("Удвоить лимит задачи", "extend"), ("Остановить", "cancel")]))
+            return
+        nudges = int(payload.get("nudges", 0))
+        if not payload.get("agent_error") and nudges < self.s.agent.max_nudges:  # закончил ход без finish
+            payload.update(nudges=nudges + 1, next_prompt="Ты закончил ход, не вызвав finish. Если работа не "
+                           "закончена — продолжай по методу; если закончена — сохрани RESULT.md и вызови finish.")
+            self._set_payload(tid, payload, status="agent_resume")
+            return
+        aid = self.store.add_approval(tid, "escalation", {"issues": [payload.get("agent_error") or "агент остановился без итога"]})
+        payload["next_prompt"] = RESUME_RESTART
+        self._set_payload(tid, payload, status="awaiting_owner")
+        await self.notifier.notify(f"⚠️ {tid}: агент остановился ({payload.get('agent_error') or 'без итога'}). "
+                                   f"Потрачено ${spent:.2f}.", buttons_for(aid, [("Продолжить", "rework"), ("Отменить", "cancel")]))
+
+    async def _agent_done(self, tid: str, fin: dict, spent: float) -> None:
+        t = self.store.task(tid)
+        payload = self._payload(t)
+        path = self.agent.workdir(tid) / "RESULT.md"
+        body = path.read_text(encoding="utf-8")[:60000] if path.exists() else (fin.get("summary") or "")
+        conf = fin.get("confidence")
+        self.cases.update(tid, strategy=str(fin.get("strategy") or "")[:3000], alternatives=fin.get("alternatives") or [],
+                          result_summary=str(fin.get("summary") or "")[:4000], result_path=str(path),
+                          confidence=float(conf) if isinstance(conf, (int, float)) else None, status="delivered")
+        self.cases.add_lessons(tid, [str(x) for x in (fin.get("lessons") or [])], "самоанализ агента")
+        payload.pop("pending", None)
+        payload["result"] = {"answer": body, "owner_actions": [str(x) for x in (fin.get("owner_actions") or [])],
+                             "open_questions": [str(x) for x in (fin.get("open_questions") or [])],
+                             "jarvis_actions": [str(x) for x in (fin.get("jarvis_actions") or [])]}
+        self._set_payload(tid, payload, status="done", note=f"агент: ${spent:.2f}, уверенность {conf}")
+        self.store.add_step(tid, "done", "agent", f"готово, ${spent:.2f}")
+        mine = "\n".join(f"• {x}" for x in payload["result"]["owner_actions"][:8])
+        his = "\n".join(f"• {x}" for x in payload["result"]["jarvis_actions"][:8])
+        text = (f"✅ {tid} готово (${spent:.2f}, уверенность {conf}).\n\n{str(fin.get('summary') or '')[:2500]}"
+                + (f"\n\nЧто делаешь ты:\n{mine}" if mine else "")
+                + (f"\n\nЧто могу сделать я (по твоему подтверждению):\n{his}" if his else "")
+                + f"\n\nПолный результат — файлом ниже и в панели. Когда будет реальный исход — напиши "
+                  f"/outcome {tid} что получилось: я разберу и запомню уроки.")
+        await self.notifier.notify(text)
+        send = getattr(self.notifier, "send_file", None)
+        if send and path.exists():
+            await send(str(path), f"{tid} — результат")
+
+    async def outcome(self, tid: str, text: str) -> str:
+        if not self.agent or not self.cases.get(tid):
+            return "По этой задаче нет дела агента."
+        self.store.add_step(tid, "outcome", "owner", text[:300])
+        lessons = await self.agent.reflect(tid, text)
+        return (f"Записал исход по {tid}. Уроки на будущее:\n" + "\n".join(f"• {x}" for x in lessons)) if lessons \
+            else f"Записал исход по {tid}."
+
     def answer_clarification(self, tid: str, text: str) -> bool:
         t = self.store.task(tid)
+        if t and t["status"] == "agent_waiting" and (self._payload(t).get("pending") or {}).get("type") == "question":
+            payload = self._payload(t)
+            payload.pop("pending", None)
+            payload["next_prompt"] = RESUME_ANSWER.format(answer=text)
+            self._set_payload(tid, payload, status="agent_resume", questions_json=[])
+            self.store.add_step(tid, "answer", "owner", text[:300])
+            return True
         if not t or t["status"] != "awaiting_clarification":
             return False
         answers = Store.loads(t["answers_json"], []) + [text]
@@ -290,6 +458,20 @@ class Orchestrator:
             return "Задача не найдена."
         card = self.card_of(t)
         self.store.add_step(tid, "decision", "owner", f"{kind}: {choice}")
+        if kind == "agent_action":
+            verdict = "подтвердил" if choice == "approve" else "отклонил"
+            pl = self._payload(t)
+            pl.pop("pending", None)
+            pl["next_prompt"] = RESUME_ACTION.format(verdict=verdict, title=payload.get("title", ""),
+                                                     note="" if choice == "approve" else " Ищи путь без этого действия.")
+            self._set_payload(tid, pl, status="agent_resume")
+            return f"{tid}: {verdict}, агент продолжает."
+        if kind == "escalation" and choice == "rework" and self._payload(t).get("session_id"):
+            pl = self._payload(t)
+            pl["next_prompt"] = pl.get("next_prompt") or RESUME_RESTART
+            pl["nudges"] = 0
+            self._set_payload(tid, pl, status="agent_resume")
+            return f"{tid}: агент продолжает."
         if choice in ("cancel", "reject"):
             self.store.update_task(tid, status="cancelled")
             return f"{tid} отменена."

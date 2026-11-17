@@ -7,6 +7,7 @@ set -euo pipefail
 APP=/opt/jarvis VENV=/opt/jarvis-venv DATA=/var/lib/jarvis
 id jarvis >/dev/null 2>&1 || useradd --system --home $DATA --shell /usr/sbin/nologin jarvis
 install -d -o jarvis -g jarvis -m 700 $DATA
+install -d -o jarvis -g jarvis -m 700 $DATA/work $DATA/work/.home   # рабочие папки агентного ядра v5
 install -d -o root -g jarvis -m 750 /etc/jarvis
 chmod +x $APP/deploy/*.sh
 
