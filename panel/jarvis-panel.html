@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis — панель</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161a21; --panel2:#1c212a; --line:#272d38; --text:#e6e9ef; --muted:#8b93a3;
+    --accent:#7aa2ff; --ok:#4fd18b; --warn:#f2b84b; --bad:#ff6b6b; --a:#ff8f6b; --b:#7aa2ff; --c:#9aa4b2;
+    --r:12px; --mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f7f9; --panel:#fff; --panel2:#f1f3f6; --line:#e3e6eb; --text:#141821; --muted:#5f6878; --accent:#3a63d8; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter,system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); }
+  .top { display:flex; align-items:center; gap:12px; padding:12px 20px; flex-wrap:wrap; }
+  .brand { font-weight:700; font-size:17px; letter-spacing:.2px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:12px; background:var(--panel2); color:var(--muted); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); }
+  .dot.stop { background:var(--bad); } .dot.stale { background:var(--warn); }
+  nav { display:flex; gap:4px; padding:0 14px; }
+  nav a { padding:10px 12px; color:var(--muted); text-decoration:none; border-bottom:2px solid transparent; font-weight:500; }
+  nav a.on { color:var(--text); border-color:var(--accent); }
+  .spacer { flex:1; }
+  main { max-width:1180px; margin:0 auto; padding:18px 20px 60px; }
+  .grid { display:grid; gap:14px; }
+  .g2 { grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); }
+  .g4 { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; }
+  .card h3 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:600; }
+  .kpi .v { font-size:24px; font-weight:700; } .kpi .s { color:var(--muted); font-size:12px; }
+  .bar { height:6px; background:var(--panel2); border-radius:4px; overflow:hidden; margin-top:8px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .row { display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--line); }
+  .row:first-of-type { border-top:0; }
+  .row .main { flex:1; min-width:0; }
+  .muted { color:var(--muted); } .small { font-size:12px; } .mono { font-family:var(--mono); font-size:12px; }
+  .cls { font:600 11px var(--mono); padding:2px 6px; border-radius:5px; background:var(--panel2); }
+  .cls.A { color:var(--a); } .cls.B { color:var(--b); } .cls.C { color:var(--c); }
+  .st { font-size:11px; padding:2px 7px; border-radius:5px; background:var(--panel2); color:var(--muted); white-space:nowrap; }
+  .st.done { color:var(--ok); } .st.awaiting_owner, .st.awaiting_clarification { color:var(--warn); } .st.cancelled { color:var(--bad); }
+  .btn { font:500 13px Inter,sans-serif; border:1px solid var(--line); background:var(--panel2); color:var(--text); padding:6px 12px; border-radius:8px; cursor:pointer; }
+  .btn:hover:not(:disabled) { border-color:var(--accent); }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .btn.ok { background:color-mix(in srgb,var(--ok) 18%,var(--panel2)); }
+  .btn.danger { background:color-mix(in srgb,var(--bad) 18%,var(--panel2)); }
+  .btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  textarea, input[type=text] { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font:14px Inter,sans-serif; resize:vertical; }
+  textarea:focus, input:focus { outline:none; border-color:var(--accent); }
+  .banner { padding:10px 14px; border-radius:10px; background:color-mix(in srgb,var(--warn) 14%,var(--panel)); border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line)); margin-bottom:14px; }
+  .banner b { display:block; margin-bottom:2px; }
+  #toast { min-height:18px; font-size:12px; color:var(--accent); padding:0 20px 8px; }
+  .answer { white-space:pre-wrap; background:var(--panel2); border-radius:8px; padding:10px 12px; max-height:420px; overflow:auto; }
+  .steps { font-family:var(--mono); font-size:11.5px; color:var(--muted); max-height:260px; overflow:auto; }
+  .steps div { padding:2px 0; border-top:1px dashed var(--line); }
+  .tsel { cursor:pointer; } .tsel:hover .main b { color:var(--accent); }
+  .empty { color:var(--muted); padding:6px 0; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td, th { text-align:left; padding:6px 4px; border-top:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  .back { color:var(--accent); cursor:pointer; margin-bottom:10px; display:inline-block; }
+  @media (max-width:640px) { main { padding:12px; } .top { padding:10px 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <span class="brand">Jarvis</span>
+    <span class="pill" id="status"><span class="dot stale"></span>загрузка…</span>
+    <span class="pill" id="updated">—</span>
+    <span class="spacer"></span>
+    <button class="btn" id="refresh" type="button">Обновить</button>
+    <button class="btn danger" id="stopbtn" type="button">Стоп</button>
+  </div>
+  <nav id="nav">
+    <a href="#main" data-v="main">Главная</a>
+    <a href="#tasks" data-v="tasks">Задачи</a>
+    <a href="#memory" data-v="memory">Память</a>
+    <a href="#system" data-v="system">Система</a>
+  </nav>
+  <div id="toast"></div>
+</header>
+<main id="app"></main>
+
+<script>
+(function () {
+  "use strict";
+  var NOTION = "Notion";
+  var STATE_PAGE = "41b2c835-ac77-8170-9520-fe9cc7f8bb1b";
+  var COMMANDS_DS = "41b2c835-ac77-8103-a21a-000b38811687";
+  var S = null, mcp = null, err = null, busy = false, view = "main", openTask = null, readAt = null;
+
+  var CHOICES = {
+    decision: [["Принять", "accept", "ok"], ["Доработать", "rework", ""], ["Отклонить", "reject", "danger"]],
+    escalation: [["Принять как есть", "accept", "ok"], ["Ещё круг", "rework", ""], ["Отменить", "cancel", "danger"]],
+    budget: [["Удвоить лимит задачи", "extend", "ok"], ["Остановить задачу", "cancel", "danger"]],
+    privacy: [["В облаке, обезличенно", "cloud", ""], ["Отменить", "cancel", "danger"]],
+    fact_conflict: [["Взять новый", "new", "ok"], ["Оставить прежний", "old", ""]]
+  };
+  var KIND = { decision: "Решение", escalation: "Не прошло проверку", budget: "Лимит", privacy: "Приватные данные", fact_conflict: "Конфликт фактов" };
+  var STATUS = { new: "новая", awaiting_clarification: "ждёт ответа", ready: "в очереди", executing: "работает", verifying: "проверка",
+                 rework: "доработка", awaiting_owner: "ждёт тебя", done: "готово", cancelled: "отменена" };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function arr(x) { return Array.isArray(x) ? x : []; }
+  function num(x) { x = Number(x); return isFinite(x) ? x : 0; }
+  function usd(x, d) { return "$" + num(x).toFixed(d == null ? 2 : d); }
+  function fdt(iso) { var t = Date.parse(iso); if (isNaN(t)) return "—";
+    try { return new Date(t).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }); }
+    catch (e) { return String(iso).slice(0, 16); } }
+  function ago(iso) { var m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (!isFinite(m)) return "—";
+    return m < 1 ? "только что" : m < 60 ? m + " мин назад" : Math.round(m / 60) + " ч назад"; }
+  function toast(t, bad) { var n = $("toast"); n.textContent = t || ""; n.style.color = bad ? "var(--bad)" : "var(--accent)"; }
+
+  /* ---------- данные: страница «Jarvis — состояние», JVDATA1:<base64 gzip JSON>:JVEND ---------- */
+  async function decode(result) {
+    var parts = [];
+    arr(result && result.content).forEach(function (b) { if (b && typeof b.text === "string") parts.push(b.text); });
+    if (result && result.payload !== undefined) { try { parts.push(typeof result.payload === "string" ? result.payload : JSON.stringify(result.payload)); } catch (e) {} }
+    var text = parts.join("\n"), i = text.indexOf("JVDATA1:"), j = i >= 0 ? text.indexOf(":JVEND", i) : -1;
+    if (i < 0 || j < 0) return null;
+    var bin = atob(text.slice(i + 8, j).replace(/[^A-Za-z0-9+\/=]/g, "")), bytes = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return JSON.parse(await new Response(stream).text());
+  }
+  var ERR = {
+    no_mcp: "Этот просмотр не может читать Notion.",
+    needs_reauth: "Коннектор Notion просит войти заново: claude.ai → Settings → Connectors → Notion.",
+    server_not_connected: "Коннектор Notion не подключён: claude.ai → Settings → Connectors.",
+    not_in_manifest: "Доступ панели к Notion выключен в разрешениях артефакта.",
+    approval_required: "Панели нужно твоё разрешение читать Notion — нажми «Разрешить» в запросе.",
+    tool_error: "В странице состояния пока нет данных — Jarvis пишет её раз в минуту."
+  };
+  async function take(result) {
+    var d = null; try { d = await decode(result); } catch (e) { d = null; }
+    if (d) { S = d; err = null; readAt = (result && result.cache && result.cache.storedAt) || Date.now(); } else if (!S) err = { code: "tool_error" };
+    render(); return !!d;
+  }
+  function onEvent(ev) { if (ev.type === "data") { take(ev.result); return; } err = ev.error || { code: "upstream_error" }; render(); }
+  async function refresh() {
+    if (!mcp) return;
+    try { await take(await mcp.callTool(NOTION, "notion-fetch", { id: STATE_PAGE }, { cache: { staleTime: 0, gcTime: 600000, refresh: true } })); }
+    catch (e) { onEvent({ type: "error", error: e }); }
+  }
+  async function start() {
+    var c = window.claude;
+    if (!c || typeof c.use !== "function") { err = { code: "no_mcp" }; render(); return; }
+    try { mcp = await c.use("mcp"); } catch (e) { mcp = null; }
+    if (!mcp) { err = { code: "no_mcp" }; render(); return; }
+    try { mcp.watchTool(NOTION, "notion-fetch", { id: STATE_PAGE }, onEvent, { cache: { staleTime: 30000, gcTime: 600000 }, refetchInterval: 60000 }); }
+    catch (e) { onEvent({ type: "error", error: { code: "bad_request" } }); }
+  }
+
+  /* ---------- команды: строка в базе «Jarvis — команды», Jarvis забирает за ~15 с ---------- */
+  async function command(type, arg, label) {
+    if (!mcp || busy) return false;
+    busy = true; render();
+    try {
+      await mcp.callTool(NOTION, "notion-create-pages", { parent: { type: "data_source_id", data_source_id: COMMANDS_DS },
+        pages: [{ properties: { "Команда": label || type, "Тип": type, "Аргумент": arg || "", "Статус": "новая" } }] });
+      toast((label || "Команда") + " — отправлено. Jarvis заберёт за ~15 с, панель обновится сама.");
+      setTimeout(refresh, 30000); setTimeout(refresh, 75000);
+      return true;
+    } catch (e) {
+      toast("Не отправилось: " + ((e && (e.message || e.code)) || "ошибка Notion") + ". Можно повторить или написать боту в Telegram.", true);
+      return false;
+    } finally { busy = false; render(); }
+  }
+  function button(label, cls, fn) { var b = el("button", "btn " + (cls || ""), label); b.type = "button"; b.disabled = busy || !mcp; b.addEventListener("click", fn); return b; }
+
+  /* ---------- шапка ---------- */
+  function renderHeader() {
+    var st = clear($("status")), up = $("updated"), sb = $("stopbtn");
+    var stale = S && (Date.now() - Date.parse(S.ts) > 5 * 60000);
+    var dot = el("span", "dot" + (!S ? " stale" : S.stopped ? " stop" : stale ? " stale" : ""));
+    st.appendChild(dot);
+    st.appendChild(document.createTextNode(!S ? (err ? "нет данных" : "загрузка…") : S.stopped ? "стоп" : stale ? "Jarvis молчит > 5 мин" : "работает"));
+    up.textContent = S ? "снимок " + ago(S.ts) : "—";
+    sb.textContent = S && S.stopped ? "Продолжить" : "Стоп";
+    sb.className = "btn " + (S && S.stopped ? "ok" : "danger");
+    sb.disabled = busy || !mcp || !S;
+    $("refresh").disabled = !mcp;
+    document.querySelectorAll("#nav a").forEach(function (a) { a.className = a.dataset.v === view ? "on" : ""; });
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+
+  /* ---------- Главная ---------- */
+  function vMain(root) {
+    var b = S.budget || {};
+    var k = el("div", "grid g4");
+    k.appendChild(kpi("Сегодня", usd(b.day) + " / " + usd(b.day_cap, 0), num(b.day) / num(b.day_cap || 1)));
+    k.appendChild(kpi("Месяц", usd(b.month) + " / " + usd(b.month_cap, 0), num(b.month) / num(b.month_cap || 1)));
+    var active = arr(S.tasks).filter(function (t) { return ["done", "cancelled"].indexOf(t.status) < 0; }).length;
+    k.appendChild(kpi("В работе", String(active), null, arr(S.approvals).length + " ждут тебя"));
+    var j = S.journal || {};
+    k.appendChild(kpi("Точность прогнозов", j.brier == null ? "—" : "Brier " + num(j.brier).toFixed(3), null, (j.n || 0) + " проверено"));
+    root.appendChild(k);
+
+    var g = el("div", "grid g2"); g.style.marginTop = "14px";
+    var c1 = el("div", "card"); c1.appendChild(el("h3", null, "Новая задача"));
+    var ta = el("textarea"); ta.rows = 3; ta.placeholder = "Что сделать? Например: «Сравни страховки для поездки в Японию» или «Напомни завтра в 10 позвонить в банк»";
+    try { ta.value = localStorage.getItem("jv-draft") || ""; } catch (e) {}
+    ta.addEventListener("input", function () { try { localStorage.setItem("jv-draft", ta.value); } catch (e) {} });
+    c1.appendChild(ta);
+    var bt = el("div", "btns");
+    bt.appendChild(button("Отправить Jarvis", "ok", function () {
+      var v = ta.value.trim(); if (!v) return;
+      command("task", v, "Задача: " + v.slice(0, 60)).then(function (ok) { if (ok) { ta.value = ""; try { localStorage.removeItem("jv-draft"); } catch (e) {} } });
+    }));
+    c1.appendChild(bt); g.appendChild(c1);
+
+    var c2 = el("div", "card"); c2.appendChild(el("h3", null, "Ждут твоего решения"));
+    var ap = arr(S.approvals), qs = arr(S.tasks).filter(function (t) { return t.status === "awaiting_clarification"; });
+    if (!ap.length && !qs.length) c2.appendChild(el("div", "empty", "Ничего не ждёт — всё под контролем."));
+    ap.forEach(function (a) { c2.appendChild(approvalRow(a)); });
+    qs.forEach(function (t) { c2.appendChild(questionRow(t)); });
+    g.appendChild(c2);
+    root.appendChild(g);
+
+    var g2 = el("div", "grid g2"); g2.style.marginTop = "14px";
+    var c3 = el("div", "card"); c3.appendChild(el("h3", null, "Последние задачи"));
+    var ts = arr(S.tasks).slice(0, 8);
+    if (!ts.length) c3.appendChild(el("div", "empty", "Задач пока нет."));
+    ts.forEach(function (t) { c3.appendChild(taskRow(t)); });
+    g2.appendChild(c3);
+    var c4 = el("div", "card"); c4.appendChild(el("h3", null, "Напоминания"));
+    var rs = arr(S.reminders);
+    if (!rs.length) c4.appendChild(el("div", "empty", "Нет запланированных. Напиши «напомни …»."));
+    rs.forEach(function (r) { var row = el("div", "row"); row.appendChild(el("span", "mono", fdt(r.due_utc))); row.appendChild(el("div", "main", r.text)); c4.appendChild(row); });
+    g2.appendChild(c4);
+    root.appendChild(g2);
+  }
+  function kpi(title, value, frac, sub) {
+    var c = el("div", "card kpi"); c.appendChild(el("h3", null, title)); c.appendChild(el("div", "v", value));
+    if (frac != null) { var b = el("div", "bar"), i = el("i"); i.style.width = Math.min(100, Math.round(frac * 100)) + "%";
+      if (frac > .8) i.style.background = "var(--warn)"; b.appendChild(i); c.appendChild(b); }
+    if (sub) c.appendChild(el("div", "s", sub));
+    return c;
+  }
+  function approvalRow(a) {
+    var row = el("div", "row"), m = el("div", "main");
+    var t = arr(S.tasks).filter(function (x) { return x.id === a.task_id; })[0];
+    m.appendChild(el("b", null, (KIND[a.kind] || a.kind) + (a.task_id ? " · " + a.task_id : "")));
+    if (t) m.appendChild(el("div", "small muted", (t.goal || t.request).slice(0, 160)));
+    arr(a.payload && a.payload.issues).slice(0, 3).forEach(function (s) { m.appendChild(el("div", "small", "• " + String(s).slice(0, 220))); });
+    var bs = el("div", "btns");
+    (CHOICES[a.kind] || [["Принять", "accept", "ok"], ["Отменить", "cancel", "danger"]]).forEach(function (c) {
+      bs.appendChild(button(c[0], c[2], function () { command("decide", a.id + " " + c[1], c[0] + " · " + (a.task_id || "#" + a.id)); }));
+    });
+    if (t) bs.appendChild(button("Открыть", "", function () { openTask = t.id; go("tasks"); }));
+    m.appendChild(bs); row.appendChild(m); return row;
+  }
+  function questionRow(t) {
+    var row = el("div", "row"), m = el("div", "main");
+    m.appendChild(el("b", null, "Вопросы по " + t.id));
+    m.appendChild(el("div", "small muted", (t.request || "").slice(0, 160)));
+    arr(t.questions).forEach(function (q, i) { m.appendChild(el("div", "small", (i + 1) + ". " + q)); });
+    var inp = el("input"); inp.type = "text"; inp.placeholder = "Ответ одним сообщением"; inp.style.marginTop = "6px";
+    m.appendChild(inp);
+    var bs = el("div", "btns");
+    bs.appendChild(button("Ответить", "ok", function () { var v = inp.value.trim(); if (v) command("answer", t.id + " | " + v, "Ответ по " + t.id); }));
+    bs.appendChild(button("На твоё усмотрение", "", function () { command("answer", t.id + " | Действуй на своё усмотрение.", "Ответ по " + t.id); }));
+    m.appendChild(bs); row.appendChild(m); return row;
+  }
+  function taskRow(t) {
+    var row = el("div", "row tsel");
+    row.appendChild(el("span", "cls " + (t.cls || ""), t.cls || "·"));
+    var m = el("div", "main"); m.appendChild(el("b", null, (t.goal || t.request || "").slice(0, 110)));
+    m.appendChild(el("div", "small muted", t.id + " · " + fdt(t.created) + " · " + usd(t.usd, 3) + (t.note ? " · " + t.note.slice(0, 80) : "")));
+    row.appendChild(m); row.appendChild(el("span", "st " + t.status, STATUS[t.status] || t.status));
+    row.addEventListener("click", function () { openTask = t.id; go("tasks"); });
+    return row;
+  }
+
+  /* ---------- Задачи ---------- */
+  function vTasks(root) {
+    var t = openTask && arr(S.tasks).filter(function (x) { return x.id === openTask; })[0];
+    if (t) { taskDetail(root, t); return; }
+    var c = el("div", "card"); c.appendChild(el("h3", null, "Задачи (последние 40)"));
+    var f = el("div", "btns"); f.style.marginTop = "0"; f.style.marginBottom = "6px";
+    var filt = (function () { try { return localStorage.getItem("jv-filter") || "all"; } catch (e) { return "all"; } })();
+    [["all", "Все"], ["active", "В работе"], ["owner", "Ждут тебя"], ["done", "Готово"]].forEach(function (p) {
+      var b = el("button", "btn" + (filt === p[0] ? " ok" : ""), p[1]); b.type = "button";
+      b.addEventListener("click", function () { try { localStorage.setItem("jv-filter", p[0]); } catch (e) {} render(); }); f.appendChild(b);
+    });
+    c.appendChild(f);
+    var ts = arr(S.tasks).filter(function (x) {
+      if (filt === "active") return ["done", "cancelled", "awaiting_owner", "awaiting_clarification"].indexOf(x.status) < 0;
+      if (filt === "owner") return x.status === "awaiting_owner" || x.status === "awaiting_clarification";
+      if (filt === "done") return x.status === "done";
+      return true;
+    });
+    if (!ts.length) c.appendChild(el("div", "empty", "Пусто."));
+    ts.forEach(function (x) { c.appendChild(taskRow(x)); });
+    root.appendChild(c);
+  }
+  function taskDetail(root, t) {
+    var back = el("span", "back", "← все задачи"); back.addEventListener("click", function () { openTask = null; render(); });
+    root.appendChild(back);
+    var c = el("div", "card");
+    var h = el("div", "row"); h.style.borderTop = "0";
+    h.appendChild(el("span", "cls " + (t.cls || ""), t.cls || "·"));
+    var m = el("div", "main"); m.appendChild(el("b", null, t.goal || t.request));
+    m.appendChild(el("div", "small muted", t.id + " · создана " + fdt(t.created) + " · обновлена " + fdt(t.updated) + " · круг " + (t.round || 0) + " · " + usd(t.usd, 3)));
+    if (t.goal && t.request && t.goal !== t.request) m.appendChild(el("div", "small muted", "Запрос: " + t.request));
+    h.appendChild(m); h.appendChild(el("span", "st " + t.status, STATUS[t.status] || t.status)); c.appendChild(h);
+    if (t.note) c.appendChild(el("div", "small", t.note));
+    var ap = arr(S.approvals).filter(function (a) { return a.task_id === t.id; });
+    ap.forEach(function (a) { c.appendChild(approvalRow(a)); });
+    if (t.status === "awaiting_clarification") c.appendChild(questionRow(t));
+    root.appendChild(c);
+    var g = el("div", "grid g2"); g.style.marginTop = "14px";
+    var a1 = el("div", "card"); a1.appendChild(el("h3", null, "Ответ"));
+    a1.appendChild(t.answer ? el("div", "answer", t.answer) : el("div", "empty", "Ответа пока нет."));
+    if (arr(t.owner_actions).length) { a1.appendChild(el("h3", null, "Что делаешь ты")); a1.lastChild.style.marginTop = "12px";
+      t.owner_actions.forEach(function (x) { a1.appendChild(el("div", "small", "• " + x)); }); }
+    if (arr(t.issues).length) { var hh = el("h3", null, "Замечания проверки"); hh.style.marginTop = "12px"; a1.appendChild(hh);
+      t.issues.forEach(function (x) { a1.appendChild(el("div", "small", "• " + x)); }); }
+    g.appendChild(a1);
+    var a2 = el("div", "card"); a2.appendChild(el("h3", null, "Ход работы"));
+    var st = el("div", "steps");
+    arr(t.steps).forEach(function (s) { st.appendChild(el("div", null, s.t + "  " + s.kind + "/" + s.actor + (s.model ? " · " + s.model : "") + (s.usd ? " · " + usd(s.usd, 4) : "") + "  " + (s.detail || ""))); });
+    if (!arr(t.steps).length) st.appendChild(el("div", null, "—"));
+    a2.appendChild(st); g.appendChild(a2);
+    root.appendChild(g);
+  }
+
+  /* ---------- Память ---------- */
+  function vMemory(root) {
+    var mem = S.memory || {}, g = el("div", "grid g2");
+    var c1 = el("div", "card"); c1.appendChild(el("h3", null, "Что Jarvis знает о тебе"));
+    var fs = arr(mem.facts);
+    if (!fs.length) c1.appendChild(el("div", "empty", "Фактов пока нет."));
+    if (fs.length) { var tb = el("table"), hr = el("tr"); ["Ключ", "Значение", "Источник"].forEach(function (x) { hr.appendChild(el("th", null, x)); }); tb.appendChild(hr);
+      fs.forEach(function (f) { var tr = el("tr"); tr.appendChild(el("td", "mono", f.key)); tr.appendChild(el("td", null, f.value));
+        tr.appendChild(el("td", "small muted", (f.source || "") + " · ур. " + (f.tier || "?") + (f.valid_until ? " · до " + f.valid_until : ""))); tb.appendChild(tr); });
+      c1.appendChild(tb); }
+    var inp = el("input"); inp.type = "text"; inp.placeholder = "Добавить факт: ключ = значение (например, виза = до 15.03.2027)"; inp.style.marginTop = "10px";
+    c1.appendChild(inp);
+    var b1 = el("div", "btns"); b1.appendChild(button("Запомнить", "ok", function () { var v = inp.value.trim(); if (v.indexOf("=") > 0) command("fact", v, "Факт: " + v.slice(0, 50)); else toast("Формат: ключ = значение", true); }));
+    c1.appendChild(b1); g.appendChild(c1);
+
+    var c2 = el("div", "card"); c2.appendChild(el("h3", null, "Правила (плейбук)"));
+    var ls = arr(mem.lessons); if (!ls.length) c2.appendChild(el("div", "empty", "Действующих правил нет."));
+    ls.forEach(function (l) { c2.appendChild(el("div", "small", "• " + l.text)); });
+    var hh = el("h3", null, "Кандидаты — принять?"); hh.style.marginTop = "14px"; c2.appendChild(hh);
+    var cs = arr(mem.candidates); if (!cs.length) c2.appendChild(el("div", "empty", "Новых кандидатов нет. Разбор доработок — каждый вечер в 21:00."));
+    cs.forEach(function (l) { var row = el("div", "row"), m = el("div", "main"); m.appendChild(el("div", null, l.text));
+      m.appendChild(el("div", "small muted", "из: " + (l.source || "—")));
+      var bs = el("div", "btns"); bs.appendChild(button("Принять", "ok", function () { command("promote", String(l.id), "Правило #" + l.id + " принято"); }));
+      bs.appendChild(button("Отклонить", "", function () { command("reject", String(l.id), "Правило #" + l.id + " отклонено"); }));
+      m.appendChild(bs); row.appendChild(m); c2.appendChild(row); });
+    g.appendChild(c2);
+    root.appendChild(g);
+
+    var j = S.journal || {}, c3 = el("div", "card"); c3.style.marginTop = "14px";
+    c3.appendChild(el("h3", null, "Журнал прогнозов"));
+    c3.appendChild(el("div", "small muted", j.brier == null ? "Проверенных прогнозов ещё нет — калибровка появится после первых исходов." :
+      "Brier " + num(j.brier).toFixed(3) + " по " + j.n + " прогнозам (0 — идеально, 0.25 — как монетка)."));
+    var cal = arr(j.calibration).filter(function (b) { return b["прогнозов"]; });
+    if (cal.length) { var tb2 = el("table"), h2 = el("tr"); ["Говорил", "Сбылось", "Сколько"].forEach(function (x) { h2.appendChild(el("th", null, x)); }); tb2.appendChild(h2);
+      cal.forEach(function (b) { var tr = el("tr"); tr.appendChild(el("td", null, Math.round(num(b["средняя_p"]) * 100) + "%"));
+        tr.appendChild(el("td", null, Math.round(num(b["сбылось"]) * 100) + "%")); tr.appendChild(el("td", null, String(b["прогнозов"]))); tb2.appendChild(tr); });
+      c3.appendChild(tb2); }
+    var op = arr(j.open); if (op.length) { var h3 = el("h3", null, "Открытые — отметь исход"); h3.style.marginTop = "12px"; c3.appendChild(h3); }
+    op.forEach(function (e) { var row = el("div", "row"), m = el("div", "main");
+      m.appendChild(el("div", null, e.q)); m.appendChild(el("div", "small muted", "p = " + num(e.p).toFixed(2) + (e.by ? " · проверить до " + String(e.by).slice(0, 10) : "")));
+      var bs = el("div", "btns"); bs.appendChild(button("Сбылось", "ok", function () { command("journal", e.id + " 1", "Прогноз #" + e.id + ": сбылось"); }));
+      bs.appendChild(button("Не сбылось", "", function () { command("journal", e.id + " 0", "Прогноз #" + e.id + ": не сбылось"); }));
+      m.appendChild(bs); row.appendChild(m); c3.appendChild(row); });
+    root.appendChild(c3);
+  }
+
+  /* ---------- Система ---------- */
+  function vSystem(root) {
+    var g = el("div", "grid g2"), h = S.health || {}, b = S.budget || {};
+    var c1 = el("div", "card"); c1.appendChild(el("h3", null, "Состояние"));
+    [["Версия на сервере", h.deployed || "—"], ["Последний бэкап (B2)", h.backup ? fdt(h.backup) : "—"], ["Свой поиск (SearXNG)", h.searxng ? "включён" : "выключен"],
+     ["Локальная модель (Mac)", h.local_llm ? "доступна" : "недоступна — приватные задачи ждут твоего решения"], ["Снимок состояния", S.ts ? fdt(S.ts) : "—"]]
+      .forEach(function (p) { var r = el("div", "row"); r.appendChild(el("div", "main muted", p[0])); r.appendChild(el("div", "mono", p[1])); c1.appendChild(r); });
+    var lim = el("div", "small muted"); lim.style.marginTop = "8px";
+    var tc = b.task_caps || {}; lim.textContent = "Лимиты: день " + usd(b.day_cap, 0) + ", месяц " + usd(b.month_cap, 0) + "; задача A " + usd(tc.A) + " · B " + usd(tc.B) + " · C " + usd(tc.C);
+    c1.appendChild(lim); g.appendChild(c1);
+
+    var c2 = el("div", "card"); c2.appendChild(el("h3", null, "Траты за месяц по моделям"));
+    var bm = arr(b.by_model); if (!bm.length) c2.appendChild(el("div", "empty", "Трат в этом месяце нет."));
+    if (bm.length) { var tb = el("table"), hr = el("tr"); ["Модель", "Вызовов", "$"].forEach(function (x) { hr.appendChild(el("th", null, x)); }); tb.appendChild(hr);
+      bm.forEach(function (m) { var tr = el("tr"); tr.appendChild(el("td", "mono", m.model)); tr.appendChild(el("td", null, String(m.n))); tr.appendChild(el("td", null, usd(m.usd, 3))); tb.appendChild(tr); });
+      c2.appendChild(tb); }
+    g.appendChild(c2);
+
+    var rw = S.rework || {}, c3 = el("div", "card"); c3.appendChild(el("h3", null, "Доработки за 7 дней"));
+    c3.appendChild(el("div", null, (rw.n || 0) + " кругов · " + usd(rw.usd) + (rw.share != null ? " · " + Math.round(rw.share * 100) + "% всех трат" : "")));
+    arr(rw.by_place).forEach(function (p) { c3.appendChild(el("div", "small muted", "• " + p.place + ": " + p.n + " кругов, " + usd(p.usd))); });
+    g.appendChild(c3);
+
+    var c4 = el("div", "card"); c4.appendChild(el("h3", null, "Модели по ролям"));
+    var RN = { card: "разбор запроса", solo: "ответ (один исполнитель)", solo_cheap: "бытовые задачи", planner: "план", worker: "исследователи",
+               synth: "итоговый ответ", critic: "проверяющие", critic_cheap: "проверка бытовых", reader: "чтение страниц" };
+    var md = S.models || {};
+    Object.keys(md).forEach(function (r) { var row = el("div", "row"); row.appendChild(el("div", "main muted small", RN[r] || r)); row.appendChild(el("div", "mono", arr(md[r]).join(" → "))); c4.appendChild(row); });
+    g.appendChild(c4);
+    root.appendChild(g);
+  }
+
+  /* ---------- рендер ---------- */
+  function render() {
+    renderHeader();
+    var root = clear($("app"));
+    if (err && (!S || err.code !== "tool_error")) {
+      var bn = el("div", "banner"); bn.appendChild(el("b", null, ERR[err.code] || "Notion не ответил, попробую ещё раз."));
+      bn.appendChild(el("span", "small", "Управление всегда есть в Telegram-боте: /status, /tasks, /stop.")); root.appendChild(bn);
+    }
+    if (!S) { if (!err) root.appendChild(el("div", "empty", "Читаю состояние Jarvis…")); return; }
+    ({ main: vMain, tasks: vTasks, memory: vMemory, system: vSystem }[view] || vMain)(root);
+  }
+  function go(v) { view = v; if (location.hash !== "#" + v) { try { history.replaceState(null, "", "#" + v); } catch (e) { location.hash = v; } } render(); window.scrollTo(0, 0); }
+  function fromHash() { var h = (location.hash || "").slice(1); view = ["main", "tasks", "memory", "system"].indexOf(h) >= 0 ? h : "main"; }
+
+  document.querySelectorAll("#nav a").forEach(function (a) { a.addEventListener("click", function (e) { e.preventDefault(); if (a.dataset.v !== "tasks") openTask = null; go(a.dataset.v); }); });
+  window.addEventListener("hashchange", function () { fromHash(); render(); });
+  $("refresh").addEventListener("click", function () { toast("Обновляю…"); refresh().then(function () { toast(S ? "Снимок от " + fdt(S.ts) : ""); }); });
+  $("stopbtn").addEventListener("click", function () {
+    var b = $("stopbtn");
+    if (S && S.stopped) { command("resume", "", "Продолжить"); return; }
+    if (b.dataset.armed) { delete b.dataset.armed; command("stop", "из панели", "Стоп"); return; }
+    b.dataset.armed = "1"; b.textContent = "Точно остановить?"; setTimeout(function () { delete b.dataset.armed; renderHeader(); }, 5000);
+  });
+  fromHash(); render(); start();
+})();
+</script>
+</body>
+</html>

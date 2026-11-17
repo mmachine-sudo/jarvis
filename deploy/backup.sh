@@ -29,5 +29,5 @@ PY
 restic cat config >/dev/null 2>&1 || restic init >/dev/null 2>&1 || { echo "бэкап: restic init не прошёл"; exit 1; }
 OUT=$(restic backup -q $STAGE /etc/jarvis /var/lib/jarvis/inherit 2>&1) || { echo "бэкап: ошибка restic: $(echo "$OUT" | tail -2 | tr '\n' ' ' | cut -c1-200)"; exit 1; }
 restic forget -q --keep-daily 30 --prune >/dev/null 2>&1 || true
-date -u +%FT%TZ > /var/lib/jarvis/.last-backup
+date -u +%FT%TZ > /var/lib/jarvis/.last-backup; chmod 644 /var/lib/jarvis/.last-backup
 echo "бэкап: ок $(cat /var/lib/jarvis/.last-backup)"

@@ -53,7 +53,7 @@ DOCALL=$($APP/deploy/run.sh doctor 2>&1 || true)
 DOC=$(echo "$DOCALL" | grep -E '✗|!|Error|error' | head -6 | tr '\n' ' ' | cut -c1-500 || true)
 systemctl restart jarvis; sleep 12
 systemctl is-active --quiet jarvis || { echo "doctor: $(echo "$DOCALL" | tail -n 8 | tr '\n' ' ' | cut -c1-400)"; journalctl -u jarvis -n 40 --no-pager -o cat | grep -v '^ *$' | tail -n 8; echo "jarvis: НЕ ЗАПУСТИЛСЯ · doctor: ${DOC:-ок}"; exit 1; }
-git -C $APP rev-parse --short HEAD > $DATA/.deployed-commit
+git -C $APP rev-parse --short HEAD > $DATA/.deployed-commit; chmod 644 $DATA/.deployed-commit; [ -f $DATA/.last-backup ] && chmod 644 $DATA/.last-backup
 # разово: агрегаты из базы MMachine (надёжность моделей, доработки) — в журнал Notion
 if [ -f $DATA/inherit/mmachine.db ] && [ ! -f $DATA/.inherit-reported ]; then
   $VENV/bin/python -m jarvis inherit-report $DATA/inherit/mmachine.db 2>&1 | head -n 25 | while IFS= read -r l; do
