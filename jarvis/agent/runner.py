@@ -213,6 +213,36 @@ class AgentRunner:
         from claude_agent_sdk import ClaudeSDKClient
         return ClaudeSDKClient(options=options)
 
+    async def key_usage(self) -> float | None:
+        """Сколько всего потрачено по ключу OpenRouter — независимый от CLI счётчик (CLI не знает цен OpenRouter)."""
+        key = self.env()["ANTHROPIC_AUTH_TOKEN"]
+        if not key or self._client_factory:
+            return None
+        try:
+            r = await self.http.get("https://openrouter.ai/api/v1/key", headers={"Authorization": f"Bearer {key}"})
+            return float(r.json()["data"]["usage"])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return None
+
+    async def _watch_spend(self, client, start: float | None, limit: float, flag: dict) -> None:
+        """Сторож бюджета: по реальному счётчику ключа; превысил — прерываем агента."""
+        if start is None:
+            return
+        while True:
+            await asyncio.sleep(30)
+            now = await self.key_usage()
+            if now is None:
+                continue
+            flag["usd"] = now - start
+            if flag["usd"] >= limit:
+                flag["over"] = True
+                log.warning("агент: сторож бюджета прервал прогон ($%.2f из $%.2f)", flag["usd"], limit)
+                try:
+                    await client.interrupt()
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+
     # --- один прогон -------------------------------------------------------------------------------------
     async def run(self, tid: str, prompt: str) -> RunState:
         t = self.store.task(tid)
@@ -228,8 +258,10 @@ class AgentRunner:
         options = self.options(tid, st, budget_left, payload.get("session_id"))
         cost, session, error = 0.0, payload.get("session_id"), None
         self.store.add_step(tid, "agent", "jarvis", f"прогон агента: {prompt[:160]}")
+        start, flag, watch = await self.key_usage(), {"usd": 0.0, "over": False}, None
         try:
             async with self._client(options) as client:
+                watch = asyncio.create_task(self._watch_spend(client, start, budget_left, flag))
                 await client.query(prompt)
                 async for msg in client.receive_response():
                     kind = type(msg).__name__
@@ -246,6 +278,14 @@ class AgentRunner:
         except Exception as e:  # noqa: BLE001 — прогон упал: сохраняем, что есть, и сообщаем
             error = f"{type(e).__name__}: {str(e)[:200]}"
             log.warning("агент %s: %s", tid, error)
+        finally:
+            if watch:
+                watch.cancel()
+        end = await self.key_usage() if start is not None else None
+        if end is not None:
+            cost = max(cost, end - start)  # реальная цена по ключу; CLI может не знать цен OpenRouter
+        if flag["over"]:
+            error = "error_max_budget_usd"
         if cost:
             self.treasury.record(f"{tid}:agent", self.cfg.model, cost)
             self.cases.add_cost(tid, cost)

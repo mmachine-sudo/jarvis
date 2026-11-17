@@ -371,7 +371,7 @@ class Orchestrator:
         if st.finished:
             await self._agent_done(tid, st.finished, spent)
             return
-        if payload.get("agent_error") == "budget" or spent >= self.s.agent.max_usd_per_task * float(t.get("cap_multiplier") or 1) - 0.05:
+        if payload.get("agent_error") in ("budget", "error_max_budget_usd") or spent >= self.s.agent.max_usd_per_task * float(t.get("cap_multiplier") or 1) - 0.05:
             aid = self.store.add_approval(tid, "budget", {"resume_status": "agent_resume"})
             payload["next_prompt"] = ("Лимит задачи увеличен владельцем. Продолжай с места остановки; если результат "
                                       "уже достаточен — сохрани RESULT.md и вызови finish.")

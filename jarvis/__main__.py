@@ -14,6 +14,35 @@ class _Silent:
         return None
 
 
+async def _agent_smoke(settings) -> int:
+    """Отдельная временная база: проверяем связку SDK → OpenRouter → инструменты jarvis → finish, с учётом цены."""
+    import tempfile
+    from .agent.cases import Cases
+    from .agent.runner import AgentRunner
+    from .store import Store
+    from .treasury import Treasury
+    tmp = tempfile.mkdtemp(prefix="jarvis-smoke-")
+    settings.db_path = f"{tmp}/smoke.db"
+    settings.agent.workdir = f"{tmp}/work"
+    settings.agent.max_usd_per_task = 0.6
+    store = Store(settings.db_path)
+    cases = Cases(store)
+    r = AgentRunner(settings, store, cases, None, _Silent(), Treasury(store, settings.budget))
+    tid = store.new_task_id()
+    store.create_task(tid, "smoke", status="agent_running")
+    cases.open(tid, "Проверка агента", "smoke")
+    st = await r.run(tid, "Это техническая проверка. Сделай ровно три шага и ничего больше: 1) один вызов web_search "
+                          "по запросу «CPA network EPC»; 2) запиши в RESULT.md одну строку с названием первого результата; "
+                          "3) вызови finish (summary — эта строка, confidence 0.5, lessons — пустой список).")
+    import json as _j
+    p = _j.loads(store.task(tid)["result_json"] or "{}")
+    for s in store.steps(tid):
+        print("шаг:", s["detail"][:160])
+    print(f"итог: finish={'да' if st.finished else 'нет'} · ${p.get('last_run_usd')} · ошибка={p.get('agent_error')} · "
+          f"сессия={'есть' if p.get('session_id') else 'нет'}")
+    return 0 if st.finished else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="jarvis")
     p.add_argument("--config", default=None)
@@ -25,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--cases", default="evals/cases.yaml")
     ev.add_argument("--max-usd", type=float, default=3.0, help="потолок трат прогона")
     sub.add_parser("status", help="бюджет и задачи")
+    sub.add_parser("agent-smoke", help="короткая проверка агентного ядра на настоящей модели (центы)")
     er = sub.add_parser("eval-report", help="разбор последнего прогона эталонов (бесплатно)")
     er.add_argument("path", nargs="?", default="/var/lib/jarvis/evals.db")
     inh = sub.add_parser("inherit-report", help="агрегаты из снимка базы MMachine (модели, доработки)")
@@ -44,6 +74,9 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(report_lines(analyze(args.path))))
         return 0
     settings = load_settings(args.config)
+
+    if args.cmd == "agent-smoke":
+        return asyncio.run(_agent_smoke(settings))
 
     if args.cmd == "doctor":
         from .doctor import check
