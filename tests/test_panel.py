@@ -69,7 +69,9 @@ async def test_commands_executed_and_answered(tmp_path):
     assert app.store.task("T-0001")["request"] == "Сводка новостей про AI"
     assert app.guard.stopped() and app.memory.facts("город")
     rich = published[0]["code"]["rich_text"]
-    snap = decode([r["text"]["content"] for r in rich])
+    texts = [r["text"]["content"] for r in rich]
+    assert texts[0] == "JVDATA1:" and texts[-1] == ":JVEND"
+    snap = decode(texts[1:-1])
     assert snap["stopped"] is True and snap["tasks"][0]["id"] == "T-0001"
 
 

@@ -121,7 +121,13 @@ class NotionPanel:
     async def publish(self, data: dict) -> None:
         if not self._code_block:
             self._code_block = await self._find_code_block()
-        rich = [{"type": "text", "text": {"content": c}} for c in encode(data)][:100]
+        # маркеры как у MMachine: панель читает страницу через notion-fetch (markdown) и ищет JVDATA1:…:JVEND
+        parts = ["JVDATA1:"] + encode(data) + [":JVEND"]
+        if len(parts) > 100:
+            log.warning("панель: снимок больше лимита Notion, урезаю задачи")
+            data = dict(data, tasks=data.get("tasks", [])[:10])
+            parts = ["JVDATA1:"] + encode(data) + [":JVEND"]
+        rich = [{"type": "text", "text": {"content": c}} for c in parts][:100]
         r = await self.client.patch(f"{API}/blocks/{self._code_block}",
                                     json={"code": {"language": "plain text", "rich_text": rich}})
         if r.status_code == 404:  # блок удалили руками — найдём или создадим заново
