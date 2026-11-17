@@ -63,6 +63,8 @@ class AgentRunner:
             "ANTHROPIC_DEFAULT_OPUS_MODEL": self.cfg.model, "ANTHROPIC_DEFAULT_SONNET_MODEL": self.cfg.sub_model,
             "ANTHROPIC_DEFAULT_HAIKU_MODEL": self.cfg.fast_model, "CLAUDE_CODE_SUBAGENT_MODEL": self.cfg.sub_model,
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_AUTOUPDATER": "1",
+            # исполнители только синхронно: фоновые гибнут, когда ход главного агента кончается (T-0002: −$1.2)
+            "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
             "OPENROUTER_API_KEY": "", "TELEGRAM_BOT_TOKEN": "", "NOTION_TOKEN": "", "JARVIS_AGENT_OPENROUTER_KEY": "",
             # отдельный дом агента: его файлы и настройки CLI не рядом с базой Jarvis
             "HOME": str(Path(self.cfg.workdir) / ".home"), "CLAUDE_CONFIG_DIR": str(Path(self.cfg.workdir) / ".home/.claude"),

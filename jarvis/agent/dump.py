@@ -35,12 +35,17 @@ def transcript(home: Path, workdir: Path, result_chars: int = 2500) -> list[str]
     for f in files:
         lines.append(f"\n===== сессия {f.relative_to(root)} =====")
         names: dict[str, str] = {}
+        seen: set[str] = set()
         for raw in f.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 d = json.loads(raw)
             except ValueError:
                 continue
             msg = d.get("message") or {}
+            uid = d.get("uuid") or ""
+            if uid and uid in seen:  # CLI пишет одну запись несколько раз
+                continue
+            seen.add(uid)
             ts = (d.get("timestamp") or "")[11:19]
             side = "  [подагент]" if d.get("isSidechain") else ""
             content = msg.get("content")
