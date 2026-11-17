@@ -139,6 +139,15 @@ class Orchestrator:
             return
         answers = Store.loads(t["answers_json"], [])
         allow_q = not answers and not Store.loads(t["questions_json"], None)
+        if allow_q:
+            # повтор похожей задачи: владелец уже отвечал на уточнения — не спрашиваем заново, берём его ответы
+            prior = self.cases.prior_answers(t["request"], exclude=tid)
+            if prior:
+                src, answers = prior[0], [f"(из {prior[0]}) {a}" for a in prior[1]]
+                self.store.update_task(tid, answers_json=answers)
+                self.store.add_step(tid, "answer", "jarvis", f"ответы на уточнения взяты из похожей задачи {src}")
+                await self.notifier.notify(f"↩️ {tid}: похожая задача уже была ({src}) — беру твои ответы оттуда, "
+                                           f"не спрашиваю заново. Если что-то изменилось — /answer {tid} текст.")
         cloud_ok = self.store.get(f"privacy_override:{tid}") == "cloud"
         sensitive = needs_local(t["request"] + " " + " ".join(answers), self.s.router) and not cloud_ok
         gw = self.gw

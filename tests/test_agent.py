@@ -236,3 +236,17 @@ def test_dump_reads_transcript_and_files(tmp_path, store):
     text = dump(store, tid, str(tmp_path))
     assert "# Итог" in text and "ВЫЗОВ mcp__jarvis__web_search" in text and "← mcp__jarvis__web_search" in text
     assert "Ищу сети" in text and "$1.000" in text
+
+
+async def test_repeat_task_reuses_owner_answers(agent_orch, store):
+    orch, gw, note = agent_orch([])
+    first = orch.submit("найди лучшие офферы на арбитраж трафика и собери связки для запуска")
+    store.update_task(first, answers_json=json.dumps(["бюджет 100$", "выплаты в крипте"], ensure_ascii=False))
+    orch.cases.open(first, "Связки", store.task(first)["request"])
+    again = orch.submit("найди лучшие офферы на арбитраж трафика, собери связки и детали для запуска")
+    await orch.run_pending()
+    t = store.task(again)
+    assert "бюджет 100$" in t["answers_json"] and t["status"] != "awaiting_clarification"
+    assert any("взяты из похожей" in s["detail"] for s in store.steps(again))
+    other = orch.submit("подбери страны для адалт проектов")
+    assert orch.cases.prior_answers(store.task(other)["request"], exclude=other) is None

@@ -92,6 +92,22 @@ class Cases:
         self.store.x("DELETE FROM cases_fts WHERE task_id=?", (task_id,))
         self.store.x("INSERT INTO cases_fts(task_id, body) VALUES(?,?)", (task_id, body))
 
+    def prior_answers(self, request: str, exclude: str | None = None, min_overlap: float = 0.6) -> tuple[str, list[str]] | None:
+        """Очень похожая прошлая задача, где владелец уже отвечал на уточнения: (номер, ответы).
+        Похожесть — доля общих основ слов (Жаккар), чтобы не переносить ответы с другой задачи."""
+        a = set(_stems(request))
+        if not a:
+            return None
+        for c in self.similar(request, 5, exclude=exclude):
+            b = set(_stems(c.get("request") or ""))
+            if not b or len(a & b) / len(a | b) < min_overlap:
+                continue
+            t = self.store.task(c["task_id"])
+            answers = Store.loads(t["answers_json"], []) if t else []
+            if answers:
+                return c["task_id"], answers
+        return None
+
     def similar(self, text: str, limit: int = 5, exclude: str | None = None) -> list[dict]:
         terms = list(dict.fromkeys(_stems(text)))[:24]
         if not terms:

@@ -133,6 +133,11 @@ class NotionPanel:
             log.warning("панель: снимок больше лимита Notion, урезаю задачи")
             data = dict(data, tasks=data.get("tasks", [])[:10])
             parts = ["JVDATA1:"] + encode(data) + [":JVEND"]
+        # короткая читаемая сводка перед данными (для людей и для разбора без декодирования)
+        head = f"{data.get('ts', '')} · за день ${(data.get('budget') or {}).get('day', 0):.2f}\n" + "\n".join(
+            f"{t['id']} {t['status']} ${t.get('usd') or 0:.2f} · {(t.get('request') or '')[:70]}"
+            for t in (data.get("tasks") or [])[:8]) + "\n\n"
+        parts = [head[:1900]] + parts[:99]
         rich = [{"type": "text", "text": {"content": c}} for c in parts][:100]
         r = await self.client.patch(f"{API}/blocks/{self._code_block}",
                                     json={"code": {"language": "plain text", "rich_text": rich}})
