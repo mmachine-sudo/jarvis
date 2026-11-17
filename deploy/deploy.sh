@@ -14,6 +14,9 @@ if [ "${1:-}" != "--force" ]; then
 fi
 install -d -m 700 /var/lib/jarvis; echo "$NEW" > /var/lib/jarvis/.attempted-commit
 git -C $APP reset -q --hard origin/main
+# коммит меняет только ops/ (запросы разборов и проверок) — работающего Jarvis не перезапускаем
+export ONLY_OPS=0
+[ -n "$OLD" ] && git -C $APP cat-file -e "$OLD" 2>/dev/null && ! git -C $APP diff --name-only "$OLD" "$NEW" | grep -qv '^ops/' && ONLY_OPS=1
 MSG=$(git -C $APP log -1 --format=%s | cut -c1-120)
 OUT=$($APP/deploy/apply.sh 2>&1); RC=$?
 echo "$(date -u +%FT%TZ) $NEW rc=$RC"$'\n'"$OUT" >> $LOG

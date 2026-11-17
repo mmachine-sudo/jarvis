@@ -201,3 +201,38 @@ def test_cases_similarity_russian_forms(store):
     cs.open("T-1", "Офферы для арбитража", "найди офферы на арбитраж трафика с минимальными действиями")
     cs.open("T-2", "Рецепт", "подбери рецепт ужина")
     assert [c["task_id"] for c in cs.similar("арбитражные офферы, трафик")][:1] == ["T-1"]
+
+
+async def test_agents_run_one_at_a_time(agent_orch, store):
+    orch, gw, note = agent_orch([])
+    a, b = orch.submit("x"), orch.submit("y")
+    store.update_task(a, status="agent_queued")
+    store.update_task(b, status="agent_queued")
+    blocker = asyncio.get_running_loop().create_future()
+    orch._bg[a] = blocker  # первый агент «работает»
+    orch._start_agent(store.task(b))
+    assert store.task(b)["status"] == "agent_queued"
+    blocker.set_result(None)
+
+
+def test_dump_reads_transcript_and_files(tmp_path, store):
+    from jarvis.agent.dump import dump
+    tid = store.new_task_id()
+    store.create_task(tid, "найди офферы")
+    store.add_step(tid, "agent", "jarvis", "прогон завершён: $1.000", "m", 1.0)
+    wd = tmp_path / tid
+    wd.mkdir()
+    (wd / "RESULT.md").write_text("# Итог", encoding="utf-8")
+    key = str(wd).replace("/", "-").replace(".", "-")
+    pd = tmp_path / ".home/.claude/projects" / key
+    pd.mkdir(parents=True)
+    rows = [{"type": "user", "timestamp": "2026-11-17T09:00:00Z", "message": {"content": "задача"}},
+            {"type": "assistant", "timestamp": "2026-11-17T09:00:05Z", "message": {"content": [
+                {"type": "text", "text": "Ищу сети"},
+                {"type": "tool_use", "id": "u1", "name": "mcp__jarvis__web_search", "input": {"query": "CPA"}}]}},
+            {"type": "user", "timestamp": "2026-11-17T09:00:07Z", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "u1", "content": [{"type": "text", "text": "[{\"url\": \"a\"}]"}]}]}}]
+    (pd / "s1.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+    text = dump(store, tid, str(tmp_path))
+    assert "# Итог" in text and "ВЫЗОВ mcp__jarvis__web_search" in text and "← mcp__jarvis__web_search" in text
+    assert "Ищу сети" in text and "$1.000" in text

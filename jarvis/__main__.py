@@ -54,6 +54,9 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--cases", default="evals/cases.yaml")
     ev.add_argument("--max-usd", type=float, default=3.0, help="потолок трат прогона")
     sub.add_parser("status", help="бюджет и задачи")
+    ad = sub.add_parser("agent-dump", help="полная выгрузка агентных задач для разбора (бесплатно)")
+    ad.add_argument("tids", nargs="+")
+    ad.add_argument("--notion", default="", help="id родительской страницы Notion; пусто — печать")
     sub.add_parser("agent-smoke", help="короткая проверка агентного ядра на настоящей модели (центы)")
     er = sub.add_parser("eval-report", help="разбор последнего прогона эталонов (бесплатно)")
     er.add_argument("path", nargs="?", default="/var/lib/jarvis/evals.db")
@@ -74,6 +77,20 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(report_lines(analyze(args.path))))
         return 0
     settings = load_settings(args.config)
+
+    if args.cmd == "agent-dump":
+        import os
+        from .agent.dump import dump, publish_notion
+        from .store import Store
+        store = Store(settings.db_path)
+        for tid in args.tids:
+            text = dump(store, tid.upper(), settings.agent.workdir)
+            if args.notion:
+                pid = publish_notion(os.environ.get("NOTION_TOKEN", ""), args.notion, f"Разбор {tid.upper()}", text)
+                print(f"разбор {tid.upper()}: страница {pid} · {len(text)} симв.")
+            else:
+                print(text)
+        return 0
 
     if args.cmd == "agent-smoke":
         return asyncio.run(_agent_smoke(settings))

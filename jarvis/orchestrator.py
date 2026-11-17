@@ -315,6 +315,9 @@ class Orchestrator:
         tid = t["id"]
         if tid in self._bg and not self._bg[tid].done():
             return
+        # агенты по очереди: общий ключ и общий счётчик трат, деньги не разбегаются параллельно
+        if any(k != tid and not v.done() for k, v in self._bg.items()):
+            return
         payload = self._payload(t)
         prompt = payload.pop("next_prompt", None) or RESUME_RESTART
         self._set_payload(tid, payload, status="agent_running")

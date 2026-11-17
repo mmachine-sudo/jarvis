@@ -52,7 +52,7 @@ systemctl start jarvis-deploy.timer jarvis-secrets-watch.timer jarvis-backup.tim
 # проверка перед запуском: выводит только «есть/нет» и id моделей, без значений секретов
 DOCALL=$($APP/deploy/run.sh doctor 2>&1 || true)
 DOC=$(echo "$DOCALL" | grep -E '✗|!|Error|error' | head -6 | tr '\n' ' ' | cut -c1-500 || true)
-systemctl restart jarvis; sleep 12
+if [ "${ONLY_OPS:-0}" = "1" ] && systemctl is-active --quiet jarvis; then :; else systemctl restart jarvis; sleep 12; fi
 systemctl is-active --quiet jarvis || { echo "doctor: $(echo "$DOCALL" | tail -n 8 | tr '\n' ' ' | cut -c1-400)"; journalctl -u jarvis -n 40 --no-pager -o cat | grep -v '^ *$' | tail -n 8; echo "jarvis: НЕ ЗАПУСТИЛСЯ · doctor: ${DOC:-ок}"; exit 1; }
 git -C $APP rev-parse --short HEAD > $DATA/.deployed-commit; chmod 644 $DATA/.deployed-commit; [ -f $DATA/.last-backup ] && chmod 644 $DATA/.last-backup
 # разово: агрегаты из базы MMachine (надёжность моделей, доработки) — в журнал Notion
@@ -72,6 +72,13 @@ if [ -f $APP/ops/agent-smoke.id ] && ! cmp -s $APP/ops/agent-smoke.id $DATA/.age
   cp $APP/ops/agent-smoke.id $DATA/.agent-smoke.id
   systemd-run --unit=jarvis-smoke-$(date +%s) --collect --property=RuntimeMaxSec=15m /bin/bash -c \
     "$APP/deploy/run.sh agent-smoke 2>&1 | grep -E 'шаг:|итог:|Error|error' | tail -n 14 | while IFS= read -r l; do $APP/deploy/notify.sh \"агент-проверка \$l\"; done" >/dev/null 2>&1 || true
+fi
+
+# полная выгрузка агентных задач в Notion (бесплатно): ops/agent-dump.id — номера задач через пробел
+if [ -f $APP/ops/agent-dump.id ] && ! cmp -s $APP/ops/agent-dump.id $DATA/.agent-dump.id; then
+  cp $APP/ops/agent-dump.id $DATA/.agent-dump.id
+  $APP/deploy/run.sh agent-dump $(grep -oE 'T-[0-9]+' $APP/ops/agent-dump.id) --notion 4062c835-ac77-81f8-ab77-d7f16258259d 2>&1 \
+    | tail -n 8 | while IFS= read -r l; do $APP/deploy/notify.sh "$l"; done
 fi
 
 # разбор прогона эталонов по запросу (бесплатно): ops/eval-report.id
