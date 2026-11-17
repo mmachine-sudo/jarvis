@@ -96,4 +96,9 @@ async def run(settings: Settings) -> None:
     app = build(settings)
     log.info("Jarvis запущен")
     await app.bot.notify("Jarvis запущен. /help — команды.")
-    await asyncio.gather(app.bot.poll_forever(), worker(app), scheduler(app))
+    jobs = [app.bot.poll_forever(), worker(app), scheduler(app)]
+    if settings.notion_token and settings.panel_state_page and settings.panel_commands_db:
+        from .panel import NotionPanel, panel_loop
+        jobs.append(panel_loop(app, NotionPanel(settings.notion_token, settings.panel_state_page,
+                                                settings.panel_commands_db)))
+    await asyncio.gather(*jobs)

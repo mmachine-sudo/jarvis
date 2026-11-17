@@ -3,7 +3,6 @@
 # Использование: run.sh run | doctor | status | evals
 set -euo pipefail
 set -a; eval "$(/opt/jarvis/deploy/secrets.sh)"; set +a
-unset NOTION_TOKEN
 export JARVIS_CONFIG=/etc/jarvis/jarvis.yaml JARVIS_DB=/var/lib/jarvis/jarvis.db HOME=/var/lib/jarvis PYTHONUNBUFFERED=1
 curl -fs -m 3 http://127.0.0.1:8888/healthz >/dev/null 2>&1 && export JARVIS_SEARXNG_URL=http://127.0.0.1:8888
 # Mac в сети Tailscale (как было у MMachine): первый онлайн-узел macOS → LM Studio на 1234

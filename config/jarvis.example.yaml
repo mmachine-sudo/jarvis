@@ -76,3 +76,7 @@ searxng_url: null
 local_llm_url: null
 
 db_path: data/jarvis.db
+
+# Панель (артефакт claude.ai) ↔ Jarvis через Notion. Токен — NOTION_TOKEN из Infisical.
+panel_state_page: 41b2c835-ac77-8170-9520-fe9cc7f8bb1b
+panel_commands_db: 41b2c835-ac77-818b-bee2-fc29f8622553

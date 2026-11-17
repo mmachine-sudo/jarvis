@@ -70,11 +70,15 @@ class Settings(BaseModel):
     local_llm_url: str | None = None
     openrouter_url: str = "https://openrouter.ai/api/v1"
     db_path: str = "data/jarvis.db"
+    # панель: страница снимка состояния и база команд в Notion (id не секретны)
+    panel_state_page: str | None = None
+    panel_commands_db: str | None = None
 
     # Секреты — только из окружения, в YAML их нет.
     openrouter_api_key: str | None = None
     telegram_bot_token: str | None = None
     telegram_owner_id: int | None = None
+    notion_token: str | None = None
 
     def task_cap(self, cls: str) -> float:
         return float(self.budget.task_usd.get(cls, self.budget.task_usd.get("B", 0.3)))
@@ -86,11 +90,12 @@ def load_settings(path: str | Path | None = None, env: dict[str, str] | None = N
     data = {}
     if cfg_path.exists():
         data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    for secret in ("openrouter_api_key", "telegram_bot_token", "telegram_owner_id"):
+    for secret in ("openrouter_api_key", "telegram_bot_token", "telegram_owner_id", "notion_token"):
         data.pop(secret, None)  # секреты из файла игнорируем намеренно
     settings = Settings(**data)
     settings.openrouter_api_key = env.get("OPENROUTER_API_KEY") or None
     settings.telegram_bot_token = env.get("TELEGRAM_BOT_TOKEN") or None
+    settings.notion_token = env.get("NOTION_TOKEN") or None  # только для панели
     owner = env.get("TELEGRAM_OWNER_ID")
     settings.telegram_owner_id = int(owner) if owner and owner.strip().lstrip("-").isdigit() else None
     if env.get("JARVIS_DB"):
